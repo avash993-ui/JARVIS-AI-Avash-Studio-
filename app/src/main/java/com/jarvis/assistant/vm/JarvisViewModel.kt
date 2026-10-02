@@ -12,6 +12,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.jarvis.assistant.data.*
+import com.jarvis.assistant.engine.Actions
 import com.jarvis.assistant.engine.LlmEngine
 import com.jarvis.assistant.engine.Persona
 import com.jarvis.assistant.search.CloudAi
@@ -142,12 +143,13 @@ class JarvisViewModel(app: Application) : AndroidViewModel(app) {
     fun backToChat() { if (engineReady) screen = Screen.Chat }
 
     // ---------- settings ----------
- @JvmName("applyLang") fun setLang(v: String) { lang = v; prefs.lang = v }
+    @JvmName("applyLang") fun setLang(v: String) { lang = v; prefs.lang = v }
     @JvmName("applyHumor") fun setHumor(v: Int) { humor = v; prefs.humor = v }
     @JvmName("applySpeakTyped") fun setSpeakTyped(v: Boolean) { speakTyped = v; prefs.speakTyped = v }
     @JvmName("applyWebOn") fun setWebOn(v: Boolean) { webOn = v; prefs.webOn = v }
     @JvmName("applyCloudMode") fun setCloudMode(v: String) { cloudMode = v; prefs.cloudMode = v }
     @JvmName("applyHfFirst") fun setHfFirst(v: Boolean) { hfFirst = v; prefs.sourceOrder = if (v) "hf,ollama" else "ollama,hf"; refreshSizes() }
+
     // ---------- chat ----------
     val busy get() = job?.isActive == true || pendingAsk != null
 
@@ -217,7 +219,7 @@ class JarvisViewModel(app: Application) : AndroidViewModel(app) {
                 val err = withContext(Dispatchers.Default) {
                     LlmEngine.generate(sys, context, userForModel) { tok ->
                         acc += tok
-                        val snap = acc
+                        val snap = Actions.strip(acc)
                         main.post {
                             if (phase != Phase.Speaking) phase = Phase.Speaking
                             show(snap)
@@ -231,7 +233,17 @@ class JarvisViewModel(app: Application) : AndroidViewModel(app) {
                 // queued token posts run before this point (same main-looper queue, FIFO)
                 if (err != null) show(this@JarvisViewModel.s.error + err)
                 else if (acc.isBlank()) show(this@JarvisViewModel.s.empty)
-                else if (speak && spoken < acc.length) say(acc.substring(spoken))
+                else {
+                    val clean = Actions.strip(acc).trim()
+                    val did = Actions.run(getApplication<Application>(), acc, lang)
+                    if (clean.isEmpty()) {
+                        val msg = did ?: this@JarvisViewModel.s.empty
+                        show(msg); if (speak) say(msg)
+                    } else {
+                        if (did != null) show(clean)
+                        if (speak && spoken < clean.length) say(clean.substring(minOf(spoken, clean.length)))
+                    }
+                }
             }
             generating = false
             persist()
