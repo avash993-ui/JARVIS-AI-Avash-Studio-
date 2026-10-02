@@ -142,13 +142,12 @@ class JarvisViewModel(app: Application) : AndroidViewModel(app) {
     fun backToChat() { if (engineReady) screen = Screen.Chat }
 
     // ---------- settings ----------
-    fun setLang(v: String) { lang = v; prefs.lang = v }
-    fun setHumor(v: Int) { humor = v; prefs.humor = v }
-    fun setSpeakTyped(v: Boolean) { speakTyped = v; prefs.speakTyped = v }
-    fun setWebOn(v: Boolean) { webOn = v; prefs.webOn = v }
-    fun setCloudMode(v: String) { cloudMode = v; prefs.cloudMode = v }
-    fun setHfFirst(v: Boolean) { hfFirst = v; prefs.sourceOrder = if (v) "hf,ollama" else "ollama,hf"; refreshSizes() }
-
+ @JvmName("applyLang") fun setLang(v: String) { lang = v; prefs.lang = v }
+    @JvmName("applyHumor") fun setHumor(v: Int) { humor = v; prefs.humor = v }
+    @JvmName("applySpeakTyped") fun setSpeakTyped(v: Boolean) { speakTyped = v; prefs.speakTyped = v }
+    @JvmName("applyWebOn") fun setWebOn(v: Boolean) { webOn = v; prefs.webOn = v }
+    @JvmName("applyCloudMode") fun setCloudMode(v: String) { cloudMode = v; prefs.cloudMode = v }
+    @JvmName("applyHfFirst") fun setHfFirst(v: Boolean) { hfFirst = v; prefs.sourceOrder = if (v) "hf,ollama" else "ollama,hf"; refreshSizes() }
     // ---------- chat ----------
     val busy get() = job?.isActive == true || pendingAsk != null
 
