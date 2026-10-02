@@ -1,5 +1,6 @@
 package com.jarvis.assistant.engine
 
+import com.llamatik.library.platform.GenStream
 import com.llamatik.library.platform.LlamaBridge
 import kotlinx.coroutines.CompletableDeferred
 
@@ -27,14 +28,17 @@ object LlmEngine {
     suspend fun generate(system: String, context: String, user: String, onDelta: (String) -> Unit): String? {
         cancelled = false
         val done = CompletableDeferred<String?>()
+        val emit = onDelta
         try {
             LlamaBridge.generateStreamWithContext(
-                system = system,
-                context = context,
-                user = user,
-                onDelta = { token -> if (!cancelled) onDelta(token) },
-                onDone = { done.complete(null) },
-                onError = { e -> done.complete(e.toString()) },
+                system,
+                context,
+                user,
+                object : GenStream {
+                    override fun onDelta(text: String) { if (!cancelled) emit(text) }
+                    override fun onComplete() { done.complete(null) }
+                    override fun onError(message: String) { done.complete(message) }
+                },
             )
         } catch (t: Throwable) {
             done.complete(t.message ?: "error")
