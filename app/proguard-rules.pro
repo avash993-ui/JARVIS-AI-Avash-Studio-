@@ -1,0 +1,2 @@
+-keep class com.llamatik.** { *; }
+-dontwarn com.llamatik.**
