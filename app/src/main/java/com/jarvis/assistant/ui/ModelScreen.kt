@@ -94,6 +94,7 @@ fun ModelScreen(vm: JarvisViewModel) {
         }
         vm.modelError?.let { err -> item { Text(s.error + err, color = Color(0xFFFF8A80), fontSize = 13.sp) } }
         items(Catalog.levels) { l -> LevelCard(vm, l) { begin(l.n) } }
+        item { AboutSection(vm) }
     }
 
     if (step == 1) {

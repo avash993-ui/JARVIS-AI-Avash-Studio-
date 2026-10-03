@@ -1,3 +1,5 @@
+
+> Created by **Avash Matrix** · **Avash Studio** — source-available, see LICENSE (no redistribution / rebranding).
 # Jarvis (Android, Kotlin + Jetpack Compose)
 
 Private on-device assistant. Gemma models run locally with llama.cpp (GGUF). Gold particle hologram,

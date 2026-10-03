@@ -1,0 +1,14 @@
+Jarvis Assistant - Source-Available License
+
+Copyright (c) 2026 Avash Matrix / Avash Studio. All rights reserved.
+
+You MAY: read the source code, learn from it, and build and use the app for yourself.
+
+You MAY NOT, without prior written permission from Avash Matrix / Avash Studio:
+  1. publish, sell or redistribute this app or modified versions of it (including on app stores or websites);
+  2. remove or change the creator credits ("Avash Matrix", "Avash Studio"), the Terms of Use screen,
+     the signature watermark or the official-signature check;
+  3. present this work, or a derivative, as your own.
+
+Third-party components (Llamatik / llama.cpp, Jetpack Compose, Gemma models, etc.) keep their own licenses.
+This software is provided "as is", without warranty of any kind.

@@ -8,23 +8,36 @@ plugins {
 
 kotlin { compilerOptions { jvmTarget.set(JvmTarget.JVM_17) } }
 
+val vCode = (project.findProperty("versionCode") as String?)?.toIntOrNull() ?: 1
+val avashKs = rootProject.file("avash.jks")
+
 android {
     namespace = "com.jarvis.assistant"
     compileSdk = 35
 
     defaultConfig {
         applicationId = "com.jarvis.assistant"
-        minSdk = 31
+        minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = vCode
+        versionName = "1.0.$vCode"
         ndk { abiFilters += "arm64-v8a" }   // real phones only -> smaller APK, faster build
     }
     lint { abortOnError = false; checkReleaseBuilds = false }
+    signingConfigs {
+        create("avash") {
+            if (avashKs.exists()) {
+                storeFile = avashKs
+                storePassword = "AvashStudio2026Key"
+                keyAlias = "avash"
+                keyPassword = "AvashStudio2026Key"
+            }
+        }
+    }
     buildTypes {
         release {
             isMinifyEnabled = false   // keeps llama.cpp JNI safe from shrinking
-            signingConfig = signingConfigs.getByName("debug")   // installable without your own keystore
+            signingConfig = signingConfigs.getByName(if (avashKs.exists()) "avash" else "debug")
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }

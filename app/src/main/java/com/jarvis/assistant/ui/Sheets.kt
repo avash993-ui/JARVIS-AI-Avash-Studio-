@@ -107,6 +107,7 @@ fun SettingsSheet(vm: JarvisViewModel, onDismiss: () -> Unit) {
             SwitchRow(s.sourceOrder, !vm.hfFirst) { vm.setHfFirst(!it) }
 
             OutlinedButton({ onDismiss(); vm.openModels() }, Modifier.fillMaxWidth()) { Text(s.changeModel, color = Gold) }
+            AboutSection(vm)
             Spacer(Modifier.height(16.dp))
         }
     }

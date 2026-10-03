@@ -25,6 +25,7 @@ class Prefs(ctx: Context) {
     /** "hf,ollama" or "ollama,hf" */
     var sourceOrder: String get() = sp.getString("sourceOrder", "hf,ollama")!!; set(v) = sp.edit().putString("sourceOrder", v).apply()
     var licenseOk: Boolean get() = sp.getBoolean("licenseOk", false); set(v) = sp.edit().putBoolean("licenseOk", v).apply()
+    var termsOk: Boolean get() = sp.getBoolean("termsV1", false); set(v) = sp.edit().putBoolean("termsV1", v).apply()
     var installed: Int get() = sp.getInt("installed", 0); set(v) = sp.edit().putInt("installed", v).apply()
 
     fun loadHistory(): MutableList<Convo> {

@@ -14,6 +14,7 @@ import androidx.lifecycle.viewModelScope
 import com.jarvis.assistant.data.*
 import com.jarvis.assistant.engine.Actions
 import com.jarvis.assistant.engine.LlmEngine
+import com.jarvis.assistant.engine.Quality
 import com.jarvis.assistant.engine.Persona
 import com.jarvis.assistant.search.CloudAi
 import com.jarvis.assistant.search.WebSearch
@@ -205,13 +206,19 @@ class JarvisViewModel(app: Application) : AndroidViewModel(app) {
             }
             var spoken = 0
 
-            if (cloud) {
+            val holdSpeech = cloudMode != "off"
+            suspend fun cloudAnswer(fallbackText: String?) {
                 val q = if (context.isBlank()) userForModel else "$context\nUser: $userForModel"
                 val r = CloudAi.ask(sys, q, prefs.cloudUrl, prefs.cloudKey, prefs.cloudModel)
                 r.onSuccess { ans ->
+                    msgs[idx] = msgs[idx].copy(cloud = true)
                     phase = Phase.Speaking; show(ans)
                     if (speak) say(ans)
-                }.onFailure { show(s.cloudFail); }
+                }.onFailure { show(fallbackText ?: this@JarvisViewModel.s.cloudFail) }
+            }
+
+            if (cloud) {
+                cloudAnswer(null)
             } else if (!engineReady) {
                 show(s.noModel)
             } else {
@@ -223,7 +230,7 @@ class JarvisViewModel(app: Application) : AndroidViewModel(app) {
                         main.post {
                             if (phase != Phase.Speaking) phase = Phase.Speaking
                             show(snap)
-                            if (speak) {
+                            if (speak && !holdSpeech) {
                                 val cut = lastBoundary(snap, spoken)
                                 if (cut > spoken) { say(snap.substring(spoken, cut)); spoken = cut }
                             }
@@ -231,7 +238,10 @@ class JarvisViewModel(app: Application) : AndroidViewModel(app) {
                     }
                 }
                 // queued token posts run before this point (same main-looper queue, FIFO)
-                if (err != null) show(this@JarvisViewModel.s.error + err)
+                val local = Actions.strip(acc).trim()
+                val needCloud = err == null && !acc.contains("ACTION:") && cloudMode != "off" && Quality.bad(text, local, lang)
+                if (needCloud) cloudAnswer(local.ifBlank { null })
+                else if (err != null) show(this@JarvisViewModel.s.error + err)
                 else if (acc.isBlank()) show(this@JarvisViewModel.s.empty)
                 else {
                     val clean = Actions.strip(acc).trim()
