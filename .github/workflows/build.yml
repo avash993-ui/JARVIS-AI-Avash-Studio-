@@ -19,7 +19,12 @@ jobs:
         env:
           KS: ${{ secrets.KEYSTORE_B64 }}
         run: |
-          if [ -n "$KS" ]; then echo "$KS" | base64 -d > avash.jks; echo "has=true" >> "$GITHUB_OUTPUT"; fi
+          if [ -n "$KS" ] && echo "$KS" | tr -d '[:space:]' | base64 -d > avash.jks 2>/dev/null && [ -s avash.jks ]; then
+            echo "has=true" >> "$GITHUB_OUTPUT"
+          else
+            rm -f avash.jks
+            echo "::warning::KEYSTORE_B64 secret is missing or invalid - building with a temporary key (no release)"
+          fi
       - run: gradle --no-daemon assembleRelease -PversionCode=${{ github.run_number }}
       - uses: actions/upload-artifact@v4
         with:
