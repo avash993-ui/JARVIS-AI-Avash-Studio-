@@ -1,31 +1,40 @@
+# JARVIS Assistant
 
-> Created by **Avash Matrix** · **Avash Studio** — source-available, see LICENSE (no redistribution / rebranding).
-# Jarvis (Android, Kotlin + Jetpack Compose)
+**JARVIS Assistant** is a smart, API-driven personal assistant independently developed by **AvashMatrix** and his personal studio.
 
-Private on-device assistant. Gemma models run locally with llama.cpp (GGUF). Gold particle hologram,
-Siri-style summon at the bottom of the screen, Persian/English UI.
+JARVIS is designed to work like a personal voice assistant, similar to **Siri**, allowing users to communicate with it naturally through voice commands and use it to control and interact with different features of their device.
 
-## Run
-1. Android Studio (Ladybug or newer) -> File > Open -> this folder -> wait for Gradle sync
-   (if asked about Gradle, use 8.11.1; or run `gradle wrapper` once in the folder).
-2. Plug in a REAL arm64 phone (Android 12+). Emulators are far too slow for LLMs.
-3. Run. First launch: the app reads RAM / chip / free storage, recommends a level and downloads it.
+### 🌐 Multilingual Support
 
-## Where things are
-- `data/Catalog.kt`      the 6 levels, Gemma model + download sources (edit here to add models, e.g. Gemma 4)
-- `data/Downloader.kt`   resumable download: Hugging Face public GGUF + registry.ollama.ai (sizes read live)
-- `engine/LlmEngine.kt`  the ONLY file that touches the llama.cpp wrapper (Llamatik 0.12.x)
-- `engine/Persona.kt`    system prompt + humor slider mapping + "hard question" / "needs web" rules
-- `search/WebSearch.kt`  Brave API (if key set) or keyless DuckDuckGo HTML
-- `search/CloudAi.kt`    free cloud fallback for hard questions (asks first by default)
-- `ui/HoloOrb.kt`        Compose port of the approved hologram (big + small variants)
+JARVIS supports both **Persian (Farsi)** and **English**, allowing users to communicate naturally in either language.
 
-## Known risks (this project was written without a compiler)
-- Not compiled/tested yet. Expect a few small compile fixes on first sync.
-- `LlmEngine.kt` uses the Llamatik API as documented for 0.12 (`initGenerateModel`, `generateStreamWithContext`).
-  If your version differs, change only that file. Stop is soft (tokens are ignored after Stop).
-- Ollama's Gemma blobs may not load in llama.cpp; that's why Hugging Face is tried first by default.
-- Free keyless cloud endpoints change often. Put your own OpenAI-compatible URL + key in Settings if they stop working.
-- DuckDuckGo HTML scraping can break; a Brave key is more reliable.
-- No always-on "Jarvis" wake word in v1 (tap the hologram or mic).
-- Prompts sent to the cloud leave the phone. Default mode is "ask first".
+The goal is to make JARVIS comfortable and accessible for both Persian-speaking and English-speaking users.
+
+### 🎙️ Voice Assistant
+
+JARVIS is designed to understand voice commands and respond to users naturally. It can be developed to perform tasks such as:
+
+* Answering questions
+* Executing voice commands
+* Controlling supported device features
+* Opening and interacting with applications
+* Providing information
+* Communicating with connected services
+* Performing AI-powered tasks
+
+### 🔌 API-Based Architecture
+
+JARVIS uses an **API-driven architecture**, allowing it to connect to different AI models and services.
+
+For better compatibility with different AI models, **LLM7.io** can be used as an API provider. This makes it easier for JARVIS to communicate with supported AI models while keeping the system flexible and expandable.
+
+**LLM7.io:**
+https://llm7.io/
+
+### 👨‍💻 Developer
+
+**AvashMatrix**
+
+JARVIS Assistant is an independent project created and developed by **AvashMatrix** and his personal studio. The concept, development, architecture, and future direction of the project are independently driven by its creator.
+
+> **JARVIS Assistant — Your intelligent voice companion, built to understand, respond, and assist.**
