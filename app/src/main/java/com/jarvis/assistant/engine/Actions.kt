@@ -54,22 +54,31 @@ object Actions {
     private val aliases = mapOf(
         "یوتیوب" to "youtube", "اینستاگرام" to "instagram", "تلگرام" to "telegram", "واتساپ" to "whatsapp",
         "دوربین" to "camera", "تنظیمات" to "settings", "ساعت" to "clock", "ماشین حساب" to "calculator",
-        "گالری" to "gallery", "مرورگر" to "chrome", "نقشه" to "maps", "مخاطبین" to "contacts", "پیامک" to "messages",
+        "گالری" to "gallery", "بازار" to "bazaar", "اسنپ" to "snapp", "دیوار" to "divar", "آپارات" to "aparat", "تماس" to "dialer", "فایل" to "files", "ایکس" to "twitter", "مرورگر" to "chrome", "نقشه" to "maps", "مخاطبین" to "contacts", "پیامک" to "messages",
     )
 
     private fun exec(ctx: Context, name: String, rawArg: String): Boolean {
         val arg = digits(rawArg)
         when (name) {
             "open_app" -> {
-                val want = (aliases[rawArg.trim()] ?: rawArg).trim().lowercase()
-                if (want.isEmpty()) return false
+                val raw = com.jarvis.assistant.data.Contacts.norm(rawArg.trim())
+                if (raw.isEmpty()) return false
+                val mapped = aliases[rawArg.trim()] ?: aliases[raw]
+                val wants = listOfNotNull(mapped, raw).distinct()
                 val pm = ctx.packageManager
                 val main = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
-                val hit = pm.queryIntentActivities(main, 0).firstOrNull {
-                    it.loadLabel(pm).toString().lowercase().contains(want) ||
-                        it.activityInfo.packageName.lowercase().contains(want)
-                } ?: return false
-                val launch = pm.getLaunchIntentForPackage(hit.activityInfo.packageName) ?: return false
+                val apps = pm.queryIntentActivities(main, 0).map {
+                    Triple(com.jarvis.assistant.data.Contacts.norm(it.loadLabel(pm).toString()), it.activityInfo.packageName.lowercase(), it)
+                }
+                // best match first: exact name, then starts-with, then contains in name, then contains in package
+                val hit = wants.firstNotNullOfOrNull { w -> apps.firstOrNull { it.first == w } }
+                    ?: wants.firstNotNullOfOrNull { w -> apps.firstOrNull { it.first.startsWith(w) } }
+                    ?: wants.firstNotNullOfOrNull { w -> apps.firstOrNull { w.length >= 2 && it.first.contains(w) } }
+                    ?: wants.firstNotNullOfOrNull { w -> apps.firstOrNull { w.length >= 3 && it.second.contains(w) } }
+                    ?: return false
+                val ai = hit.third.activityInfo
+                val launch = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+                    .setClassName(ai.packageName, ai.name)
                 go(ctx, launch); return true
             }
             "call" -> {

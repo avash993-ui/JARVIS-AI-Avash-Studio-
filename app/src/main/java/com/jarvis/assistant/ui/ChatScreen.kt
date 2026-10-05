@@ -35,6 +35,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Send
 import androidx.compose.material.icons.rounded.AddComment
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Contacts
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.History
@@ -123,6 +124,8 @@ fun ChatScreen(vm: JarvisViewModel) {
                 Modifier.align(Alignment.BottomCenter).padding(start = 20.dp, end = 20.dp, bottom = 78.dp).graphicsLayer { alpha = al },
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
+                IconTile(Icons.Rounded.Close, vm.tr("بستن", "Close"), { vm.stopAll() }, 38.dp)
+                Spacer(Modifier.height(8.dp))
                 val label = when (vm.phase) {
                     Phase.Listening -> s.stListen
                     Phase.Thinking -> if (vm.webNote) s.stWeb else s.stThink

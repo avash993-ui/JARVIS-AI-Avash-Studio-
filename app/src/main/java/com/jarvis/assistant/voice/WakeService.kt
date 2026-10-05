@@ -93,7 +93,7 @@ class WakeService : Service() {
         val l = b?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION) ?: return false
         val name = prefs.assistantName
         if (l.none { Wake.matches(it, name) }) return false
-        rec?.cancel()
+        rec?.destroy(); rec = null   // release the mic fully so the app can use it right away
         Wake.busy = true
         h.postDelayed({ Wake.busy = false }, 30_000)   // safety: never stay silent forever
         try {

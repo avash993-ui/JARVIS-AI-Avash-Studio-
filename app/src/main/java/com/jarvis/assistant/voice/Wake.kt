@@ -5,7 +5,12 @@ import com.jarvis.assistant.data.Contacts
 /** Shared state + name matching for the "say the name" feature. */
 object Wake {
     /** true while the app itself is using the mic / speaking, so the background listener stays quiet. */
-    @Volatile var busy = false
+    @Volatile private var busyFlag = false
+    @Volatile private var busyAt = 0L
+    /** Expires by itself after 40s, so a missed "finished" callback can never silence the name listener forever. */
+    var busy: Boolean
+        get() = busyFlag && System.currentTimeMillis() - busyAt < 40_000
+        set(v) { busyFlag = v; if (v) busyAt = System.currentTimeMillis() }
     private val variants = listOf("jarvis", "جارویس", "جاروس", "جارویز", "جاروویس", "جاریس", "جرویس")
 
     fun matches(text: String, name: String): Boolean {

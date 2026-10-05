@@ -144,7 +144,7 @@ class JarvisViewModel(app: Application) : AndroidViewModel(app) {
     fun onWake() {
         if (!configured) return
         screen = Screen.Chat
-        main.postDelayed({ startListening() }, 400)
+        main.postDelayed({ startListening() }, 600)   // give the background recognizer time to release the mic
     }
 
     // ---------- permissions ----------
@@ -334,12 +334,13 @@ class JarvisViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun say(chunk: String) {
+        Wake.busy = true   // keep the lease fresh while speaking
         voice.speak(chunk, lang) { if (!generating) main.post { finishTurn() } }
     }
 
     private fun finishTurn() {
         phase = Phase.Idle
-        viewModelScope.launch { delay(1200); if (phase == Phase.Idle) { overlay = false; Wake.busy = false } }
+        viewModelScope.launch { delay(1200); if (phase == Phase.Idle) Wake.busy = false }   // overlay stays until the user closes it
     }
 
     fun startListening() {
@@ -350,7 +351,7 @@ class JarvisViewModel(app: Application) : AndroidViewModel(app) {
         voice.listen(lang,
             onPartial = { overlayText = it },
             onFinal = { send(it, true) },
-            onFail = { overlayText = s.micFail; phase = Phase.Idle; viewModelScope.launch { delay(1500); if (phase == Phase.Idle) overlay = false } })
+            onFail = { overlayText = s.micFail; phase = Phase.Idle; Wake.busy = false; viewModelScope.launch { delay(1500); if (phase == Phase.Idle) overlay = false } })
     }
 
     fun stopAll() {

@@ -109,7 +109,8 @@ fun ContactsScreen(vm: JarvisViewModel) {
             confirmButton = {
                 TextButton({
                     if (vm.addAlias(alias, c.number)) aliasFor = null
-                    else err = vm.tr("نسخه‌ی دمو فقط ۳ میانبر داره. حالت توسعه‌دهنده رو فعال کن.", "The demo allows only 3 shortcuts. Unlock developer mode for more.")
+                    else err = if (alias.isBlank()) vm.tr("یه اسم برای میانبر بنویس.", "Type a name for the shortcut.")
+                        else vm.tr("نسخه‌ی دمو فقط ۳ میانبر داره. حالت توسعه‌دهنده رو فعال کن.", "The demo allows only 3 shortcuts. Unlock developer mode for more.")
                 }) { Text(vm.tr("ذخیره", "Save"), color = Gold) }
             },
             dismissButton = { TextButton({ aliasFor = null }) { Text(vm.tr("لغو", "Cancel"), color = Muted) } },
