@@ -1,6 +1,9 @@
 package com.jarvis.assistant.ui
 
+import android.content.Intent
+import android.provider.Settings
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -58,6 +61,7 @@ private fun SwitchRow(label: String, checked: Boolean, onChange: (Boolean) -> Un
 fun SettingsSheet(vm: JarvisViewModel, onDismiss: () -> Unit) {
     val s = vm.s
     var brave by remember { mutableStateOf(vm.prefs.braveKey) }
+    val ctx = LocalContext.current
 
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = Panel) {
         Column(
@@ -90,6 +94,12 @@ fun SettingsSheet(vm: JarvisViewModel, onDismiss: () -> Unit) {
 
             SwitchRow(s.readTyped, vm.speakTyped) { vm.setSpeakTyped(it) }
             SwitchRow(s.webSearch, vm.webOn) { vm.setWebOn(it) }
+            SwitchRow(vm.tr("🎙 گوش‌به‌زنگ: با صدا زدن اسم دستیار باز بشه", "🎙 Always listening: open by saying the name"), vm.wakeOn) { vm.setWake(it) }
+            if (vm.wakeOn) {
+                SwitchRow(vm.tr("فقط وقتی صفحه روشنه (باتری کمتر)", "Only while the screen is on (saves battery)"), vm.wakeScreenOnly) { vm.setWakeScreenOnly(it) }
+                Text(vm.tr("لازمه: اجازه‌ی میکروفون و «نمایش روی برنامه‌های دیگر». اگه گوشی سرویس رو می‌کشه، برنامه رو از بهینه‌سازی باتری مستثنی کن.", "Needs the microphone and “Display over other apps” permissions. If your phone kills the service, exclude the app from battery optimisation."), color = Muted, fontSize = 11.sp, lineHeight = 17.sp)
+                OutlinedButton({ ctx.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }, Modifier.fillMaxWidth()) { Text(vm.tr("🔋 تنظیم بهینه‌سازی باتری", "🔋 Battery optimisation settings"), color = Gold) }
+            }
             OutlinedTextField(brave, { brave = it; vm.prefs.braveKey = it }, label = { Text(s.braveKey, fontSize = 12.sp) }, singleLine = true, modifier = Modifier.fillMaxWidth())
 
             ExtrasSection(vm)

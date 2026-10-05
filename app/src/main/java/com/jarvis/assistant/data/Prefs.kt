@@ -23,6 +23,9 @@ class Prefs(ctx: Context) {
     var apiKey: String get() = sp.getString("apiKey", "")!!; set(v) = sp.edit().putString("apiKey", v).apply()
     var apiModel: String get() = sp.getString("apiModel", "")!!; set(v) = sp.edit().putString("apiModel", v).apply()
 
+    var wakeOn: Boolean get() = sp.getBoolean("wakeOn", false); set(v) = sp.edit().putBoolean("wakeOn", v).apply()
+    var wakeScreenOnly: Boolean get() = sp.getBoolean("wakeScreenOnly", true); set(v) = sp.edit().putBoolean("wakeScreenOnly", v).apply()
+
     // ---- personalisation ----
     var assistantName: String get() = sp.getString("assistantName", "")!!; set(v) = sp.edit().putString("assistantName", v).apply()
     var devOk: Boolean get() = sp.getBoolean("devOk", false); set(v) = sp.edit().putBoolean("devOk", v).apply()

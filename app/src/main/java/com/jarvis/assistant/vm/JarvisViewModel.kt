@@ -3,6 +3,12 @@ package com.jarvis.assistant.vm
 import android.Manifest
 import android.app.Application
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
+import android.provider.Settings
+import androidx.core.content.ContextCompat
+import com.jarvis.assistant.voice.Wake
+import com.jarvis.assistant.voice.WakeService
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
@@ -114,11 +120,39 @@ class JarvisViewModel(app: Application) : AndroidViewModel(app) {
     }
     private fun cfg() = Api.Cfg(prefs.apiBase, prefs.apiKey, prefs.apiModel)
 
+    // ---------- always-listening (say the name) ----------
+    var wakeOn by mutableStateOf(prefs.wakeOn); private set
+    var wakeScreenOnly by mutableStateOf(prefs.wakeScreenOnly); private set
+    private var wakeRetry = false
+    fun setWakeScreenOnly(v: Boolean) { wakeScreenOnly = v; prefs.wakeScreenOnly = v }
+    private fun has(p: String) = ContextCompat.checkSelfPermission(ctx, p) == PackageManager.PERMISSION_GRANTED
+    fun setWake(on: Boolean) {
+        wakeOn = on; prefs.wakeOn = on
+        if (!on) { ctx.stopService(Intent(ctx, WakeService::class.java)); return }
+        val need = mutableListOf<String>()
+        if (!has(Manifest.permission.RECORD_AUDIO)) need.add(Manifest.permission.RECORD_AUDIO)
+        if (Build.VERSION.SDK_INT >= 33 && !has(Manifest.permission.POST_NOTIFICATIONS)) need.add(Manifest.permission.POST_NOTIFICATIONS)
+        if (!Settings.canDrawOverlays(ctx))
+            ctx.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + ctx.packageName)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        if (need.isNotEmpty()) { wakeRetry = true; permRequest = need } else startWake()
+    }
+    fun startWake() {
+        if (wakeOn && has(Manifest.permission.RECORD_AUDIO))
+            try { ContextCompat.startForegroundService(ctx, Intent(ctx, WakeService::class.java)) } catch (e: Throwable) {}
+    }
+    /** Called when the background listener heard the name and opened the app. */
+    fun onWake() {
+        if (!configured) return
+        screen = Screen.Chat
+        main.postDelayed({ startListening() }, 400)
+    }
+
     // ---------- permissions ----------
     var permRequest by mutableStateOf<List<String>>(emptyList()); private set
     private var retryName: String? = null
     fun clearPermRequest() { permRequest = emptyList() }
     fun onPermResult() {
+        if (wakeRetry) { wakeRetry = false; startWake() }
         val n = retryName ?: return
         retryName = null
         if (Contacts.hasRead(ctx)) {
@@ -144,6 +178,7 @@ class JarvisViewModel(app: Application) : AndroidViewModel(app) {
     init {
         history.addAll(prefs.loadHistory())
         screen = if (configured) Screen.Chat else Screen.Setup
+        if (wakeOn) startWake()
     }
 
     private var cache: List<Contact>? = null
@@ -210,6 +245,7 @@ class JarvisViewModel(app: Application) : AndroidViewModel(app) {
     fun send(text: String, viaVoice: Boolean = false) {
         val t = text.trim()
         if (t.isEmpty() || busy) return
+        Wake.busy = true
         if (viaVoice) { overlay = true; overlayText = t; phase = Phase.Thinking }
         if (resolvePending(t, viaVoice)) return
         when (val c = Intents.parse(t)) {
@@ -303,11 +339,12 @@ class JarvisViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun finishTurn() {
         phase = Phase.Idle
-        viewModelScope.launch { delay(1200); if (phase == Phase.Idle) overlay = false }
+        viewModelScope.launch { delay(1200); if (phase == Phase.Idle) { overlay = false; Wake.busy = false } }
     }
 
     fun startListening() {
         if (busy) return
+        Wake.busy = true
         voice.stopSpeaking()
         overlay = true; overlayText = ""; phase = Phase.Listening
         voice.listen(lang,
@@ -319,7 +356,7 @@ class JarvisViewModel(app: Application) : AndroidViewModel(app) {
     fun stopAll() {
         job?.cancel(); voice.stopSpeaking(); voice.stopListening()
         generating = false; webNote = false
-        phase = Phase.Idle; overlay = false
+        phase = Phase.Idle; overlay = false; Wake.busy = false
     }
 
     // ---------- history ----------
