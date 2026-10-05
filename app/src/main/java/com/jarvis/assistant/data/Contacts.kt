@@ -3,7 +3,7 @@ package com.jarvis.assistant.data
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
-import android.provider.ContactsContract
+import android.provider.ContactsContract.CommonDataKinds.Phone
 import androidx.core.content.ContextCompat
 
 data class Contact(val name: String, val number: String)
@@ -34,10 +34,9 @@ object Contacts {
     fun load(ctx: Context): List<Contact> {
         val out = ArrayList<Contact>()
         val seen = HashSet<String>()
-        val P = ContactsContract.CommonDataKinds.Phone
-        ctx.contentResolver.query(P.CONTENT_URI, arrayOf(P.DISPLAY_NAME, P.NUMBER), null, null, P.DISPLAY_NAME + " COLLATE LOCALIZED ASC")?.use { c ->
-            val ni = c.getColumnIndexOrThrow(P.DISPLAY_NAME)
-            val pi = c.getColumnIndexOrThrow(P.NUMBER)
+        ctx.contentResolver.query(Phone.CONTENT_URI, arrayOf(Phone.DISPLAY_NAME, Phone.NUMBER), null, null, Phone.DISPLAY_NAME + " COLLATE LOCALIZED ASC")?.use { c ->
+            val ni = c.getColumnIndexOrThrow(Phone.DISPLAY_NAME)
+            val pi = c.getColumnIndexOrThrow(Phone.NUMBER)
             while (c.moveToNext()) {
                 val n = c.getString(ni) ?: continue
                 val p = c.getString(pi) ?: continue
