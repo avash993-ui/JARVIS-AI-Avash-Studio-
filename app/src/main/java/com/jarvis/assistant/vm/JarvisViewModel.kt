@@ -6,10 +6,11 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.provider.Settings
+import android.net.Uri
 import androidx.core.content.ContextCompat
 import com.jarvis.assistant.voice.Wake
 import com.jarvis.assistant.voice.WakeService
-import android.net.Uri
+import com.jarvis.assistant.voice.OverlayService
 import android.os.Handler
 import android.os.Looper
 import android.speech.SpeechRecognizer
@@ -27,6 +28,8 @@ import com.jarvis.assistant.data.Convo
 import com.jarvis.assistant.data.Msg
 import com.jarvis.assistant.data.Prefs
 import com.jarvis.assistant.data.Providers
+import com.jarvis.assistant.data.AttachmentReader
+import com.jarvis.assistant.data.ArtifactWriter
 import com.jarvis.assistant.engine.Actions
 import com.jarvis.assistant.engine.Cmd
 import com.jarvis.assistant.engine.Intents
@@ -182,8 +185,12 @@ class JarvisViewModel(app: Application) : AndroidViewModel(app) {
         val need = mutableListOf<String>()
         if (!has(Manifest.permission.RECORD_AUDIO)) need.add(Manifest.permission.RECORD_AUDIO)
         if (Build.VERSION.SDK_INT >= 33 && !has(Manifest.permission.POST_NOTIFICATIONS)) need.add(Manifest.permission.POST_NOTIFICATIONS)
-        // Wake Mode only needs microphone + foreground-service permissions.
-        // Do not force the user into the overlay settings just to enable Wake Mode.
+        if (Build.VERSION.SDK_INT >= 23 && !Settings.canDrawOverlays(ctx)) {
+            wakeRetry = true
+            try { ctx.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${ctx.packageName}")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } catch (_: Throwable) {}
+            if (need.isNotEmpty()) permRequest = need else startWake()
+            return
+        }
         if (need.isNotEmpty()) { wakeRetry = true; permRequest = need } else startWake()
     }
     fun startWake() {
@@ -195,13 +202,12 @@ class JarvisViewModel(app: Application) : AndroidViewModel(app) {
             android.util.Log.e("JARVIS-Wake", "Unable to start WakeService", e)
         }
     }
-    /** Called when the background listener heard the name and opened the app. */
+    /** Starts the conversation after the floating overlay has appeared. */
     fun onWake() {
         if (!configured) return
         screen = Screen.Chat
         wakeConversation = true
         followupJob?.cancel()
-        // The background WakeService has just released the microphone. Keep the summon UI small.
         main.postDelayed({ startListening(wakeMode = true, waitSilently = true) }, 650)
     }
 
@@ -453,6 +459,7 @@ class JarvisViewModel(app: Application) : AndroidViewModel(app) {
         overlayText = ""
         wakeConversation = false
         Wake.busy = false
+        if (Build.VERSION.SDK_INT >= 26) runCatching { ctx.stopService(Intent(ctx, OverlayService::class.java)) }
     }
 
     fun startListening(wakeMode: Boolean = false, waitSilently: Boolean = false) {
@@ -486,6 +493,50 @@ class JarvisViewModel(app: Application) : AndroidViewModel(app) {
         job?.cancel(); voice.stopSpeaking(); voice.stopListening()
         generating = false; webNote = false
         phase = Phase.Idle; overlay = false; Wake.busy = false
+        runCatching { ctx.stopService(Intent(ctx, OverlayService::class.java)) }
+    }
+
+    // ---------- attachments / multimodal ----------
+    fun analyzeAttachment(uri: Uri) {
+        if (!configured || busy) return
+        viewModelScope.launch {
+            phase = Phase.Thinking; overlay = true
+            val cr = ctx.contentResolver
+            val mime = cr.getType(uri) ?: "application/octet-stream"
+            val name = uri.lastPathSegment?.substringAfterLast('/')?.ifBlank { "attachment" } ?: "attachment"
+            val payload = runCatching { AttachmentReader.read(ctx, uri, name, mime) }.getOrElse {
+                phase = Phase.Idle; overlayText = s.error + (it.message ?: ""); return@launch
+            }
+            overlayText = tr("دارم $name رو بررسی می‌کنم…", "Analyzing $name…")
+            val prompt = payload.prompt + "\n\nAnswer in the user's language. Explain what you see, important problems, and useful next steps."
+            Api.analyzeParts(cfg(), prompt, payload.images, if (devOk) 1400 else 800).onSuccess { answer ->
+                msgs.add(Msg("user", tr("فایل: $name", "File: $name"))); msgs.add(Msg("assistant", answer)); persist()
+                overlayText = answer; phase = Phase.Speaking; say(answer)
+            }.onFailure { e ->
+                overlayText = s.error + (e.message ?: ""); phase = Phase.Idle; overlay = false; Wake.busy = false
+            }
+        }
+    }
+
+    fun exportAnswerAsProject(text: String) {
+        val parts = ArtifactWriter.extract(text)
+        if (parts.isEmpty()) return
+        runCatching { ArtifactWriter.share(ctx, ArtifactWriter.writeZip(ctx, parts)) }
+            .onFailure { overlayText = s.error + (it.message ?: "") }
+    }
+
+    fun generateImage(prompt: String) {
+        if (!configured || prompt.isBlank() || busy) return
+        viewModelScope.launch {
+            phase = Phase.Thinking; overlay = true; overlayText = tr("دارم تصویر رو می‌سازم…", "Generating the image…")
+            Api.generateImage(cfg(), prompt).onSuccess { result ->
+                val answer = if (result.startsWith("http") || result.startsWith("data:image")) result else tr("تصویر ساخته شد.", "Image generated.")
+                msgs.add(Msg("user", tr("ساخت تصویر: $prompt", "Generate image: $prompt"))); msgs.add(Msg("assistant", answer)); persist()
+                overlayText = answer; phase = Phase.Idle; overlay = false; Wake.busy = false
+            }.onFailure { e ->
+                overlayText = s.error + (e.message ?: ""); phase = Phase.Idle; overlay = false; Wake.busy = false
+            }
+        }
     }
 
     // ---------- history ----------

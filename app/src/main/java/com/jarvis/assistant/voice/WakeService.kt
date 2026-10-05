@@ -19,12 +19,10 @@ import android.os.PowerManager
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
-import com.jarvis.assistant.MainActivity
 import com.jarvis.assistant.data.Prefs
 
 /**
- * Always-on listener (foreground service). Saves battery by: preferring offline recognition, pausing while the app
- * is busy, pausing when the screen is off (optional), and backing off after errors. On the name it opens the app.
+ * Always-on listener (foreground service). On the wake phrase it opens a floating overlay without launching MainActivity.
  */
 class WakeService : Service() {
     private val h = Handler(Looper.getMainLooper())
@@ -32,6 +30,7 @@ class WakeService : Service() {
     private var running = false
     private var screenOn = true
     private var fails = 0
+    private var wakeEnglishNext = false
     // The wake phrase is Persian and must be recognized as "هی جارویس".
     // Use the provider's normal Persian recognition path instead of forcing an
     // offline engine that may not have a Persian model installed.
@@ -62,7 +61,7 @@ class WakeService : Service() {
         val fa = prefs.lang == "fa"
         val name = prefs.assistantName.ifBlank { if (fa) "جارویس" else "Jarvis" }
         getSystemService(NotificationManager::class.java).createNotificationChannel(NotificationChannel("wake", "Listening", NotificationManager.IMPORTANCE_LOW))
-        val open = PendingIntent.getActivity(this, 2, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
+        val open = PendingIntent.getActivity(this, 2, Intent(this, com.jarvis.assistant.MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
         val stop = PendingIntent.getService(this, 1, Intent(this, WakeService::class.java).setAction("STOP"), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         val n = Notification.Builder(this, "wake").setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .setContentTitle(if (fa) "$name گوش می‌ده" else "$name is listening")
@@ -85,11 +84,14 @@ class WakeService : Service() {
             return
         }
         if (rec == null) rec = SpeechRecognizer.createSpeechRecognizer(this).also { it.setRecognitionListener(listener) }
+        val wakeLang = if (wakeEnglishNext) "en-US" else if (prefs.lang == "fa") "fa-IR" else java.util.Locale.getDefault().toLanguageTag()
+        wakeEnglishNext = !wakeEnglishNext
         val i = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
             .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             .putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
             .putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, false)
-            .putExtra(RecognizerIntent.EXTRA_LANGUAGE, "fa-IR")
+            // Alternate Persian/English recognition passes so either "هی جارویس" or "Hey Jarvis" can wake it.
+            .putExtra(RecognizerIntent.EXTRA_LANGUAGE, wakeLang)
             .putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
             .putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, packageName)
         try {
@@ -110,8 +112,12 @@ class WakeService : Service() {
         Wake.busy = true
         h.postDelayed({ Wake.busy = false }, 30_000)   // safety: never stay silent forever
         try {
-            startActivity(Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP).putExtra("wake", true))
-        } catch (e: Throwable) { Wake.busy = false }
+            val overlay = Intent(this, OverlayService::class.java).setAction(OverlayService.ACTION_WAKE)
+            startService(overlay)
+        } catch (e: Throwable) {
+            android.util.Log.e("JARVIS-Wake", "Unable to start overlay", e)
+            Wake.busy = false
+        }
         schedule(2000)
         return true
     }

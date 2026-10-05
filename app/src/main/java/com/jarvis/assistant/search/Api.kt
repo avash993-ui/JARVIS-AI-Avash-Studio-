@@ -53,6 +53,34 @@ object Api {
         }
     }
 
+    suspend fun analyzeParts(cfg: Cfg, text: String, imageDataUrls: List<String>, maxTokens: Int = 900): Result<String> = withContext(Dispatchers.IO) {
+        runCatching {
+            val content = JSONArray()
+            content.put(JSONObject().put("type", "text").put("text", text))
+            imageDataUrls.take(6).forEach { content.put(JSONObject().put("type", "image_url").put("image_url", JSONObject().put("url", it))) }
+            val arr = JSONArray().put(JSONObject().put("role", "user").put("content", content))
+            val b = JSONObject().put("model", cfg.model).put("messages", arr).put("max_tokens", maxTokens)
+            val c = open(cfg.base.trimEnd('/') + "/chat/completions", "POST", cfg.key)
+            c.doOutput = true; c.setRequestProperty("Content-Type", "application/json")
+            c.outputStream.use { it.write(b.toString().toByteArray()) }
+            val j = JSONObject(read(c)); val t = j.getJSONArray("choices").getJSONObject(0).getJSONObject("message").optString("content", "").trim()
+            if (t.isBlank()) throw IllegalStateException("empty answer")
+            t
+        }
+    }
+
+    suspend fun generateImage(cfg: Cfg, prompt: String): Result<String> = withContext(Dispatchers.IO) {
+        runCatching {
+            val b = JSONObject().put("model", cfg.model).put("prompt", prompt).put("n", 1).put("size", "1024x1024")
+            val c = open(cfg.base.trimEnd('/') + "/images/generations", "POST", cfg.key)
+            c.doOutput = true; c.setRequestProperty("Content-Type", "application/json")
+            c.outputStream.use { it.write(b.toString().toByteArray()) }
+            val j = JSONObject(read(c)); val d = j.optJSONArray("data") ?: throw IllegalStateException("no image data")
+            val item = d.getJSONObject(0)
+            item.optString("url").ifBlank { item.optString("b64_json").let { if (it.isBlank()) "" else "data:image/png;base64,$it" } }
+        }
+    }
+
     suspend fun test(cfg: Cfg): Result<String> = chat(cfg, listOf("user" to "Reply with the single word: OK"), 12)
 
     /** Live list of model ids from {base}/models (can be 50-300+ entries depending on the service). */

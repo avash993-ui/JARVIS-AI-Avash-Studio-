@@ -38,6 +38,7 @@
             <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths" />
         </provider>
         <service android:name=".voice.WakeService" android:exported="false" android:foregroundServiceType="microphone" />
+        <service android:name=".voice.OverlayService" android:exported="false" android:foregroundServiceType="microphone" />
         <activity
             android:name=".MainActivity"
             android:exported="true"

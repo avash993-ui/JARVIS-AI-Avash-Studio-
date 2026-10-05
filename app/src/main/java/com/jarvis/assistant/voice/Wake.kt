@@ -20,6 +20,8 @@ object Wake {
 
     private const val HEY = "هی"
     private const val JARVIS = "جارویس"
+    private const val EN_HEY = "hey"
+    private const val EN_JARVIS = "jarvis"
 
     /**
      * Strict Persian wake phrase.
@@ -39,6 +41,8 @@ object Wake {
         if (t.isBlank()) return false
         val tokens = t.split(' ').filter { it.isNotBlank() }
         if (tokens.size < 2) return false
-        return tokens[0] == HEY && tokens[1] == JARVIS
+        val fa = tokens[0] == HEY && tokens[1] == JARVIS
+        val en = tokens[0] == EN_HEY && tokens[1] == EN_JARVIS
+        return fa || en
     }
 }

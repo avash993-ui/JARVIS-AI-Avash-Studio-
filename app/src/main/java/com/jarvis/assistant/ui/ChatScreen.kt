@@ -35,14 +35,22 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Send
 import androidx.compose.material.icons.rounded.AddComment
+import androidx.compose.material.icons.rounded.AttachFile
+import androidx.compose.material.icons.rounded.Code
+import androidx.compose.material.icons.rounded.Description
+import androidx.compose.material.icons.rounded.FolderZip
+import androidx.compose.material.icons.rounded.Image
+import androidx.compose.material.icons.rounded.PictureAsPdf
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Contacts
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Stop
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -54,6 +62,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -75,6 +84,11 @@ fun ChatScreen(vm: JarvisViewModel) {
     var input by remember { mutableStateOf("") }
     var showSettings by remember { mutableStateOf(false) }
     var showHistory by remember { mutableStateOf(false) }
+    var showFiles by remember { mutableStateOf(false) }
+    var imagePrompt by remember { mutableStateOf("") }
+    var showImagePrompt by remember { mutableStateOf(false) }
+    val singleFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let { vm.analyzeAttachment(it) } }
+    val multiFiles = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris -> uris.forEach { vm.analyzeAttachment(it) } }
 
     val micLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
         if (ok) vm.startListening()
@@ -97,6 +111,7 @@ fun ChatScreen(vm: JarvisViewModel) {
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
+                IconTile(Icons.Rounded.AttachFile, vm.tr("افزودن فایل", "Add file"), { showFiles = true }, 44.dp)
                 OutlinedTextField(
                     value = input, onValueChange = { input = it },
                     placeholder = { Text(s.hint, color = Muted) },
@@ -174,8 +189,65 @@ fun ChatScreen(vm: JarvisViewModel) {
             }
         }
     }
+    if (showFiles) AttachmentSheet(
+        vm = vm,
+        onDismiss = { showFiles = false },
+        onFile = { showFiles = false; singleFile.launch(arrayOf("*/*")) },
+        onImage = { showFiles = false; singleFile.launch(arrayOf("image/*")) },
+        onZip = { showFiles = false; singleFile.launch(arrayOf("application/zip", "application/java-archive")) },
+        onCode = { showFiles = false; singleFile.launch(arrayOf("text/*", "application/json", "application/xml", "application/octet-stream")) },
+        onPdf = { showFiles = false; singleFile.launch(arrayOf("application/pdf")) },
+        onMulti = { showFiles = false; multiFiles.launch(arrayOf("*/*")) },
+        onImageGenerate = { showFiles = false; showImagePrompt = true },
+    )
+    if (showImagePrompt) {
+        AlertDialog(
+            onDismissRequest = { showImagePrompt = false },
+            title = { Text(vm.tr("ساخت تصویر", "Generate image")) },
+            text = { OutlinedTextField(value = imagePrompt, onValueChange = { imagePrompt = it }, label = { Text(vm.tr("توضیح تصویر", "Image prompt")) }) },
+            confirmButton = { TextButton(onClick = { val p = imagePrompt; imagePrompt = ""; showImagePrompt = false; vm.generateImage(p) }) { Text(vm.tr("ساخت", "Generate")) } },
+            dismissButton = { TextButton(onClick = { showImagePrompt = false }) { Text(vm.s.close) } },
+        )
+    }
     if (showSettings) SettingsSheet(vm) { showSettings = false }
     if (showHistory) HistorySheet(vm) { showHistory = false }
+}
+
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+private fun AttachmentSheet(
+    vm: JarvisViewModel, onDismiss: () -> Unit, onFile: () -> Unit, onImage: () -> Unit,
+    onZip: () -> Unit, onCode: () -> Unit, onPdf: () -> Unit, onMulti: () -> Unit, onImageGenerate: () -> Unit,
+) {
+    androidx.compose.material3.ModalBottomSheet(onDismissRequest = onDismiss, containerColor = Panel) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(vm.tr("افزودن فایل", "Add file"), color = Gold, fontSize = 20.sp)
+            Text(vm.tr("فایل برای تحلیل به هوش مصنوعی/API فرستاده می‌شود. تصاویر و صفحات PDF نیز قابل دیدن هستند.", "Files are sent to the AI/API for analysis. Images and PDF pages can also be inspected."), color = Muted, fontSize = 12.sp)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                AttachmentOption(Icons.Rounded.Description, vm.tr("فایل", "File"), onFile, Modifier.weight(1f))
+                AttachmentOption(Icons.Rounded.Image, vm.tr("تصویر", "Image"), onImage, Modifier.weight(1f))
+                AttachmentOption(Icons.Rounded.FolderZip, vm.tr("ZIP / پروژه", "ZIP / Project"), onZip, Modifier.weight(1f))
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                AttachmentOption(Icons.Rounded.Code, vm.tr("کد", "Code"), onCode, Modifier.weight(1f))
+                AttachmentOption(Icons.Rounded.PictureAsPdf, vm.tr("PDF", "PDF"), onPdf, Modifier.weight(1f))
+                AttachmentOption(Icons.Rounded.AttachFile, vm.tr("چند فایل", "Multiple"), onMulti, Modifier.weight(1f))
+            }
+            androidx.compose.material3.OutlinedButton(onClick = onImageGenerate, modifier = Modifier.fillMaxWidth()) {
+                Text(vm.tr("ساخت تصویر با API", "Generate image with API"), color = Gold)
+            }
+            Text(vm.tr("خود آیکون‌ها متن ندارند؛ نام فارسی/English زیرشان از رابط کاربری می‌آید.", "Icons stay text-free; the Persian/English labels are rendered by the UI below them."), color = Muted, fontSize = 10.sp)
+            Spacer(Modifier.height(10.dp))
+        }
+    }
+}
+
+@Composable
+private fun AttachmentOption(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(5.dp)) {
+        IconTile(icon, label, onClick, 58.dp)
+        Text(label, color = GoldText, fontSize = 11.sp, textAlign = TextAlign.Center, maxLines = 2)
+    }
 }
 
 @Composable
@@ -237,6 +309,9 @@ private fun Bubble(vm: JarvisViewModel, index: Int, m: Msg) {
                         })
                         if (m.cloud) Text(s.cloudBadge, color = Cyan, fontSize = 11.sp)
                         if (m.web) Text(s.webBadge, color = Gold, fontSize = 11.sp)
+                        if (com.jarvis.assistant.data.ArtifactWriter.extract(m.text).isNotEmpty()) {
+                            Icon(Icons.Rounded.Share, vm.tr("ساخت فایل پروژه", "Export project files"), tint = Cyan, modifier = Modifier.size(16.dp).clickable { vm.exportAnswerAsProject(m.text) })
+                        }
                     }
                 }
             }

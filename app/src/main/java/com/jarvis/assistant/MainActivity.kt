@@ -41,6 +41,13 @@ class MainActivity : ComponentActivity() {
         if (intent.getBooleanExtra("wake", false)) { intent.removeExtra("wake"); model.onWake() }
     }
 
+    override fun onResume() {
+        super.onResume()
+        if (model.wakeOn && android.os.Build.VERSION.SDK_INT >= 23 && android.provider.Settings.canDrawOverlays(this)) {
+            model.startWake()
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
