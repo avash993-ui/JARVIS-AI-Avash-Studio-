@@ -134,7 +134,7 @@ fun SettingsSheet(vm: JarvisViewModel, onDismiss: () -> Unit) {
             )
 
             SwitchRow(s.webSearch, vm.webOn) { vm.setWebOn(it) }
-            SwitchRow(vm.tr("🎙 گوش‌به‌زنگ: با صدا زدن اسم دستیار باز بشه", "🎙 Always listening: open by saying the name"), vm.wakeOn) { vm.setWake(it) }
+            SwitchRow(vm.tr("🎙 گوش‌به‌زنگ: با گفتن «هی جارویس» باز بشه", "🎙 Always listening: open by saying “Hey Jarvis”"), vm.wakeOn) { vm.setWake(it) }
             if (vm.wakeOn) {
                 SwitchRow(vm.tr("فقط وقتی صفحه روشنه (باتری کمتر)", "Only while the screen is on (saves battery)"), vm.wakeScreenOnly) { vm.updateWakeScreenOnly(it) }
                 Text(vm.tr("لازمه: اجازه‌ی میکروفون و «نمایش روی برنامه‌های دیگر». اگه گوشی سرویس رو می‌کشه، برنامه رو از بهینه‌سازی باتری مستثنی کن.", "Needs the microphone and “Display over other apps” permissions. If your phone kills the service, exclude the app from battery optimisation."), color = Muted, fontSize = 11.sp, lineHeight = 17.sp)

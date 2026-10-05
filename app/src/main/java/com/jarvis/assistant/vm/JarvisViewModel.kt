@@ -182,13 +182,18 @@ class JarvisViewModel(app: Application) : AndroidViewModel(app) {
         val need = mutableListOf<String>()
         if (!has(Manifest.permission.RECORD_AUDIO)) need.add(Manifest.permission.RECORD_AUDIO)
         if (Build.VERSION.SDK_INT >= 33 && !has(Manifest.permission.POST_NOTIFICATIONS)) need.add(Manifest.permission.POST_NOTIFICATIONS)
-        if (!Settings.canDrawOverlays(ctx))
-            ctx.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + ctx.packageName)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        // Wake Mode only needs microphone + foreground-service permissions.
+        // Do not force the user into the overlay settings just to enable Wake Mode.
         if (need.isNotEmpty()) { wakeRetry = true; permRequest = need } else startWake()
     }
     fun startWake() {
-        if (wakeOn && has(Manifest.permission.RECORD_AUDIO))
-            try { ContextCompat.startForegroundService(ctx, Intent(ctx, WakeService::class.java)) } catch (e: Throwable) {}
+        if (!wakeOn || !has(Manifest.permission.RECORD_AUDIO)) return
+        try {
+            ContextCompat.startForegroundService(ctx, Intent(ctx, WakeService::class.java))
+        } catch (e: Throwable) {
+            // Keep the toggle state, but surface the failure in logs instead of silently hiding it.
+            android.util.Log.e("JARVIS-Wake", "Unable to start WakeService", e)
+        }
     }
     /** Called when the background listener heard the name and opened the app. */
     fun onWake() {

@@ -32,7 +32,9 @@ class WakeService : Service() {
     private var running = false
     private var screenOn = true
     private var fails = 0
-    private var preferOffline = true
+    // The wake phrase is Persian and must be recognized as "هی جارویس".
+    // Use the provider's normal Persian recognition path instead of forcing an
+    // offline engine that may not have a Persian model installed.
     private lateinit var prefs: Prefs
 
     private val screenRx = object : BroadcastReceiver() {
@@ -64,7 +66,7 @@ class WakeService : Service() {
         val stop = PendingIntent.getService(this, 1, Intent(this, WakeService::class.java).setAction("STOP"), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         val n = Notification.Builder(this, "wake").setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .setContentTitle(if (fa) "$name گوش می‌ده" else "$name is listening")
-            .setContentText(if (fa) "اسمم رو صدا بزن" else "Say my name")
+            .setContentText(if (fa) "بگو: هی جارویس" else "Say: Hey Jarvis")
             .setContentIntent(open).setOngoing(true)
             .addAction(Notification.Action.Builder(null, if (fa) "خاموش" else "Stop", stop).build()).build()
         if (Build.VERSION.SDK_INT >= 29) startForeground(7, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE) else startForeground(7, n)
@@ -77,18 +79,23 @@ class WakeService : Service() {
     private fun schedule(ms: Long) { h.removeCallbacks(tick); h.postDelayed(tick, ms) }
 
     private fun listen() {
-        if (!SpeechRecognizer.isRecognitionAvailable(this)) { stopSelf(); return }
+        if (!SpeechRecognizer.isRecognitionAvailable(this)) {
+            android.util.Log.e("JARVIS-Wake", "No SpeechRecognizer available on this device")
+            stopSelf()
+            return
+        }
         if (rec == null) rec = SpeechRecognizer.createSpeechRecognizer(this).also { it.setRecognitionListener(listener) }
         val i = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
             .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             .putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-            .putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, preferOffline)
-            .putExtra(RecognizerIntent.EXTRA_LANGUAGE, if (prefs.lang == "fa") "fa-IR" else "en-US")
+            .putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, false)
+            .putExtra(RecognizerIntent.EXTRA_LANGUAGE, "fa-IR")
             .putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
             .putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, packageName)
         try {
             rec?.startListening(i)
         } catch (e: Throwable) {
+            android.util.Log.e("JARVIS-Wake", "startListening failed", e)
             rec?.destroy(); rec = null
             schedule(1200)
         }
@@ -96,8 +103,9 @@ class WakeService : Service() {
 
     private fun heard(b: Bundle?): Boolean {
         val l = b?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION) ?: return false
-        val name = prefs.assistantName
-        if (l.none { Wake.matches(it, name) }) return false
+        // Wake activation is intentionally independent of the customizable assistant
+        // display name. The user must say the exact phrase "هی جارویس".
+        if (l.none { Wake.matches(it) }) return false
         rec?.destroy(); rec = null   // release the mic fully so the app can use it right away
         Wake.busy = true
         h.postDelayed({ Wake.busy = false }, 30_000)   // safety: never stay silent forever
@@ -117,9 +125,11 @@ class WakeService : Service() {
                 schedule(120)
                 return
             }
-            if (e == SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS) { stopSelf(); return }
-            // 12/13 = language not supported / unavailable offline -> fall back to online recognition
-            if (e == 12 || e == 13) preferOffline = false
+            if (e == SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS) {
+                android.util.Log.e("JARVIS-Wake", "RECORD_AUDIO permission was rejected")
+                stopSelf()
+                return
+            }
             fails++
             if (e == SpeechRecognizer.ERROR_CLIENT || e == SpeechRecognizer.ERROR_RECOGNIZER_BUSY) { rec?.destroy(); rec = null }
             schedule((300L + fails * 400L).coerceAtMost(4000L))

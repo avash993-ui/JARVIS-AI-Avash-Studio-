@@ -2,22 +2,43 @@ package com.jarvis.assistant.voice
 
 import com.jarvis.assistant.data.Contacts
 
-/** Shared state + name matching for the "say the name" feature. */
+/** Wake phrase matching for the always-listening service.
+ *
+ * The activation phrase is intentionally strict: the user must say
+ * "هی جارویس". Saying only "جارویس" must never activate Wake Mode.
+ */
 object Wake {
-    /** true while the app itself is using the mic / speaking, so the background listener stays quiet. */
     @Volatile private var busyFlag = false
     @Volatile private var busyAt = 0L
-    /** Expires by itself after 40s, so a missed "finished" callback can never silence the name listener forever. */
+
     var busy: Boolean
         get() = busyFlag && System.currentTimeMillis() - busyAt < 40_000
-        set(v) { busyFlag = v; if (v) busyAt = System.currentTimeMillis() }
-    private val variants = listOf("jarvis", "جارویس", "جاروس", "جارویز", "جاروویس", "جاریس", "جرویس")
+        set(v) {
+            busyFlag = v
+            if (v) busyAt = System.currentTimeMillis()
+        }
 
-    fun matches(text: String, name: String): Boolean {
+    private const val HEY = "هی"
+    private const val JARVIS = "جارویس"
+
+    /**
+     * Strict Persian wake phrase.
+     *
+     * Accepted examples:
+     *  - "هی جارویس"
+     *  - "هی، جارویس" (punctuation is normalized)
+     *  - "هی جارویس ساعت چنده" (wake phrase followed by a request)
+     *
+     * Rejected examples:
+     *  - "جارویس"
+     *  - "سلام جارویس"
+     *  - "هی جاروس"
+     */
+    fun matches(text: String): Boolean {
         val t = Contacts.norm(text)
-        val n = Contacts.norm(name)
-        val isDefault = n.isEmpty() || n == "jarvis" || n == "جارویس"
-        if (n.length >= 3 && t.contains(n)) return true
-        return isDefault && variants.any { t.contains(Contacts.norm(it)) }
+        if (t.isBlank()) return false
+        val tokens = t.split(' ').filter { it.isNotBlank() }
+        if (tokens.size < 2) return false
+        return tokens[0] == HEY && tokens[1] == JARVIS
     }
 }
