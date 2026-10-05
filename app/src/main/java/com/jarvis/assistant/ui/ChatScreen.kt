@@ -35,6 +35,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Send
 import androidx.compose.material.icons.rounded.AddComment
+import androidx.compose.material.icons.rounded.Contacts
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Mic
@@ -139,16 +140,6 @@ fun ChatScreen(vm: JarvisViewModel) {
             }
         }
     }
-
-    vm.pendingAsk?.let {
-        AlertDialog(
-            onDismissRequest = { vm.stopAll() },
-            title = { Text(s.askTitle) }, text = { Text(s.askBody) },
-            confirmButton = { TextButton({ vm.answerAsk(true) }) { Text(s.askYes, color = Gold) } },
-            dismissButton = { TextButton({ vm.answerAsk(false) }) { Text(s.askNo) } },
-            containerColor = Panel,
-        )
-    }
     if (showSettings) SettingsSheet(vm) { showSettings = false }
     if (showHistory) HistorySheet(vm) { showHistory = false }
 }
@@ -159,9 +150,11 @@ private fun TopBar(vm: JarvisViewModel, onHistory: () -> Unit, onNew: () -> Unit
     Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         HoloOrb(vm.phase, 30.dp)
         Column(Modifier.padding(horizontal = 10.dp).weight(1f)) {
-            Text("JARVIS", color = Gold, fontSize = 14.sp)
-            if (vm.installed > 0) Text("${s.level} ${vm.installed}", color = Muted, fontSize = 11.sp)
+            Text(vm.assistantName, color = Gold, fontSize = 14.sp)
+            Text(vm.prefs.apiModel, color = Muted, fontSize = 11.sp, maxLines = 1)
         }
+        IconTile(Icons.Rounded.Contacts, vm.tr("مخاطبین", "Contacts"), { vm.openContacts() }, 38.dp)
+        Spacer(Modifier.size(6.dp))
         IconTile(Icons.Rounded.History, s.history, onHistory, 38.dp)
         Spacer(Modifier.size(6.dp))
         IconTile(Icons.Rounded.AddComment, s.newChat, onNew, 38.dp)
@@ -210,9 +203,6 @@ private fun Bubble(vm: JarvisViewModel, index: Int, m: Msg) {
                         })
                         if (m.cloud) Text(s.cloudBadge, color = Cyan, fontSize = 11.sp)
                         if (m.web) Text(s.webBadge, color = Gold, fontSize = 11.sp)
-                        if (!m.cloud && vm.cloudMode != "off" && !vm.busy) {
-                            Text(s.cloudChip, color = Cyan, fontSize = 12.sp, modifier = Modifier.clickable { vm.askCloudAgain(index) })
-                        }
                     }
                 }
             }

@@ -21,7 +21,6 @@ android {
         targetSdk = 35
         versionCode = vCode
         versionName = "1.0.$vCode"
-        ndk { abiFilters += "arm64-v8a" }   // real phones only -> smaller APK, faster build
     }
     lint { abortOnError = false; checkReleaseBuilds = false }
     signingConfigs {
@@ -62,6 +61,4 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
 
-    // llama.cpp for Android (GGUF). Only engine/LlmEngine.kt touches this API.
-    implementation("com.llamatik:library:0.12.0")
 }

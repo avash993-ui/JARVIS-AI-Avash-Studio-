@@ -53,18 +53,10 @@ private fun SwitchRow(label: String, checked: Boolean, onChange: (Boolean) -> Un
     }
 }
 
-@Composable
-private fun Field(label: String, value: String, onChange: (String) -> Unit) {
-    OutlinedTextField(value, onChange, label = { Text(label, fontSize = 12.sp) }, singleLine = true, modifier = Modifier.fillMaxWidth())
-}
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsSheet(vm: JarvisViewModel, onDismiss: () -> Unit) {
     val s = vm.s
-    var url by remember { mutableStateOf(vm.prefs.cloudUrl) }
-    var key by remember { mutableStateOf(vm.prefs.cloudKey) }
-    var model by remember { mutableStateOf(vm.prefs.cloudModel) }
     var brave by remember { mutableStateOf(vm.prefs.braveKey) }
 
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = Panel) {
@@ -73,6 +65,13 @@ fun SettingsSheet(vm: JarvisViewModel, onDismiss: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             Text(s.settings, color = Gold, fontSize = 20.sp)
+
+            OutlinedButton({ onDismiss(); vm.openSetup() }, Modifier.fillMaxWidth()) {
+                Text(vm.tr("🔌 اتصال به هوش مصنوعی (API / مدل)", "🔌 AI connection (API / model)"), color = Gold)
+            }
+            OutlinedButton({ onDismiss(); vm.openContacts() }, Modifier.fillMaxWidth()) {
+                Text(vm.tr("📒 مخاطبین و میانبرها", "📒 Contacts & shortcuts"), color = Gold)
+            }
 
             Text(s.language, color = Muted, fontSize = 12.sp)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -91,22 +90,9 @@ fun SettingsSheet(vm: JarvisViewModel, onDismiss: () -> Unit) {
 
             SwitchRow(s.readTyped, vm.speakTyped) { vm.setSpeakTyped(it) }
             SwitchRow(s.webSearch, vm.webOn) { vm.setWebOn(it) }
+            OutlinedTextField(brave, { brave = it; vm.prefs.braveKey = it }, label = { Text(s.braveKey, fontSize = 12.sp) }, singleLine = true, modifier = Modifier.fillMaxWidth())
 
-            Text(s.cloudMode, color = Muted, fontSize = 12.sp)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Chip(s.off, vm.cloudMode == "off") { vm.setCloudMode("off") }
-                Chip(s.ask, vm.cloudMode == "ask") { vm.setCloudMode("ask") }
-                Chip(s.auto, vm.cloudMode == "auto") { vm.setCloudMode("auto") }
-            }
-            Text(s.cloudHelp, color = Muted, fontSize = 12.sp, lineHeight = 18.sp)
-            Field(s.cloudUrl, url) { url = it; vm.prefs.cloudUrl = it }
-            Field(s.cloudKey, key) { key = it; vm.prefs.cloudKey = it }
-            Field(s.cloudModel, model) { model = it; vm.prefs.cloudModel = it }
-            Field(s.braveKey, brave) { brave = it; vm.prefs.braveKey = it }
-
-            SwitchRow(s.sourceOrder, !vm.hfFirst) { vm.setHfFirst(!it) }
-
-            OutlinedButton({ onDismiss(); vm.openModels() }, Modifier.fillMaxWidth()) { Text(s.changeModel, color = Gold) }
+            ExtrasSection(vm)
             AboutSection(vm)
             Spacer(Modifier.height(16.dp))
         }

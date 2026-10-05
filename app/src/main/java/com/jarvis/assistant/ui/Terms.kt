@@ -21,25 +21,25 @@ import com.jarvis.assistant.vm.JarvisViewModel
 
 private const val FA_TERMS = """۱. جارویس ساخته‌ی «آوش ماتریکس» (Avash Matrix) و «Avash Studio» است. حق نشر و نام سازنده محفوظه. کپی، تغییر نام یا انتشار دوباره‌ی برنامه بدون اجازه‌ی کتبی ممنوعه.
 
-۲. جواب‌های هوش مصنوعی ممکنه اشتباه باشه. برای تصمیم‌های پزشکی، حقوقی و مالی بهش تکیه نکن.
+۲. جارویس برای جواب دادن از یه سرویس هوش مصنوعی (API) که خودت وصل می‌کنی استفاده می‌کنه. متن پیام‌هات (و نتیجه‌ی جستجوی وب، در صورت استفاده) به همون سرویس فرستاده میشه و شرایط و حریم خصوصی اون سرویس برای اون بخش اعمال میشه. کلید API فقط روی گوشی خودت ذخیره میشه.
 
-۳. اگه مدل روی گوشی جواب رو نداند یا مطمئن نباشه، متن سؤالت برای گرفتن جواب به یه سرویس هوش مصنوعی ابری فرستاده میشه. اگه نمی‌خوای، تو تنظیمات «هوش مصنوعی ابری» رو «خاموش» کن.
+۳. جواب‌های هوش مصنوعی ممکنه اشتباه باشه. برای تصمیم‌های پزشکی، حقوقی و مالی بهش تکیه نکن.
 
-۴. جستجوی وب و دستورهای گوشی (باز کردن برنامه، آلارم و...) فقط به درخواست خودت انجام میشن.
+۴. برای تماس با اسم و نمایش مخاطبین، برنامه به مخاطبین گوشی دسترسی می‌خواد. مخاطبین فقط روی گوشی خونده میشن و برای هوش مصنوعی فرستاده نمیشن. تماس‌ها و دستورهای گوشی فقط به درخواست خودت انجام میشن.
 
-۵. مدل‌های Gemma تابع شرایط استفاده‌ی گوگل هستن (ai.google.dev/gemma/terms).
+۵. حافظه‌ی جارویس (چیزهایی که می‌گی یادش بمونه) روی گوشی ذخیره میشه و تو پیام‌های بعدی به هوش مصنوعی فرستاده میشه.
 
 ۶. برنامه «همان‌طور که هست» و بدون هیچ ضمانتی ارائه میشه و مسئولیت استفاده با خودته."""
 
 private const val EN_TERMS = """1. JARVIS is created by Avash Matrix of Avash Studio. Copyright and the creator's name are reserved. Copying, renaming or redistributing the app without written permission is not allowed.
 
-2. AI answers can be wrong. Do not rely on them for medical, legal or financial decisions.
+2. To answer, JARVIS uses an AI service (API) that you connect yourself. Your messages (and web search results, when used) are sent to that service, and its own terms and privacy policy apply to that part. Your API key is stored only on your phone.
 
-3. If the on-device model doesn't know or isn't sure, your question text is sent to a cloud AI service to get an answer. To avoid this, set "Cloud AI" to Off in Settings.
+3. AI answers can be wrong. Do not rely on them for medical, legal or financial decisions.
 
-4. Web search and phone commands (opening apps, alarms, etc.) run only when you ask for them.
+4. To call by name and show contacts, the app needs access to your contacts. Contacts are read on the phone only and are not sent to the AI. Calls and phone commands run only when you ask for them.
 
-5. Gemma models are subject to Google's terms (ai.google.dev/gemma/terms).
+5. JARVIS's memory (things you ask it to remember) is stored on your phone and sent to the AI with later messages.
 
 6. The app is provided "as is" without any warranty; you use it at your own risk."""
 
