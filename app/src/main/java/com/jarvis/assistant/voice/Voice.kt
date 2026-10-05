@@ -26,10 +26,14 @@ class Voice(private val ctx: Context) {
             ttsReady = status == TextToSpeech.SUCCESS
             if (ttsReady) {
                 tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-                override fun onStart(id: String?) {}
-                override fun onDone(id: String?) { finishOne() }
-                @Deprecated("Deprecated in Java") override fun onError(id: String?) { finishOne() }
-            })
+                    override fun onStart(id: String?) {}
+                    override fun onDone(id: String?) { finishOne() }
+                    @Deprecated("Deprecated in Java")
+                    override fun onError(id: String?) { finishOne() }
+                })
+                applySelectedVoice()
+                readyCallback?.invoke(availableVoices())
+            }
         }
     }
 
