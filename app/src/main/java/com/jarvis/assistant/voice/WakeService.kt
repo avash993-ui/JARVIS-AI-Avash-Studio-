@@ -32,6 +32,7 @@ class WakeService : Service() {
     private var running = false
     private var screenOn = true
     private var fails = 0
+    private var preferOffline = true
     private lateinit var prefs: Prefs
 
     private val screenRx = object : BroadcastReceiver() {
@@ -81,7 +82,7 @@ class WakeService : Service() {
         val i = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
             .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             .putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-            .putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
+            .putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, preferOffline)
             .putExtra(RecognizerIntent.EXTRA_LANGUAGE, if (prefs.lang == "fa") "fa-IR" else "en-US")
             .putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
             .putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, packageName)
@@ -106,6 +107,11 @@ class WakeService : Service() {
         override fun onPartialResults(b: Bundle?) { heard(b) }
         override fun onResults(b: Bundle?) { fails = 0; if (!heard(b)) schedule(150) }
         override fun onError(e: Int) {
+            // silence / nothing recognised is NORMAL while waiting for the name: restart right away, no backoff
+            if (e == SpeechRecognizer.ERROR_NO_MATCH || e == SpeechRecognizer.ERROR_SPEECH_TIMEOUT) { schedule(100); return }
+            if (e == SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS) { stopSelf(); return }
+            // 12/13 = language not supported / unavailable offline -> fall back to online recognition
+            if (e == 12 || e == 13) preferOffline = false
             fails++
             if (e == SpeechRecognizer.ERROR_CLIENT || e == SpeechRecognizer.ERROR_RECOGNIZER_BUSY) { rec?.destroy(); rec = null }
             schedule((300L + fails * 400L).coerceAtMost(4000L))
