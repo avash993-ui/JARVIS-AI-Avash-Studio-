@@ -115,12 +115,12 @@ fun SettingsSheet(vm: JarvisViewModel, onDismiss: () -> Unit) {
                 DropdownMenu(expanded = voiceMenu, onDismissRequest = { voiceMenu = false }) {
                     DropdownMenuItem(
                         text = { Text(vm.tr("بهینه / صدای پیش‌فرض سیستم", "Optimized / system default")) },
-                        onClick = { vm.setTtsVoice("system-default"); voiceMenu = false }
+                        onClick = { vm.changeTtsVoice("system-default"); voiceMenu = false }
                     )
                     vm.ttsVoices.take(40).forEach { voice ->
                         DropdownMenuItem(
                             text = { Text("${voice.locale.displayLanguage} — ${voice.name}", maxLines = 1) },
-                            onClick = { vm.setTtsVoice(voice.name); voiceMenu = false }
+                            onClick = { vm.changeTtsVoice(voice.name); voiceMenu = false }
                         )
                     }
                 }

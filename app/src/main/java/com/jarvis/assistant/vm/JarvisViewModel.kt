@@ -75,7 +75,7 @@ class JarvisViewModel(app: Application) : AndroidViewModel(app) {
     @JvmName("applyLang") fun setLang(v: String) { lang = v; prefs.lang = v }
     @JvmName("applyHumor") fun setHumor(v: Int) { humor = v; prefs.humor = v }
     @JvmName("applySpeakTyped") fun setSpeakTyped(v: Boolean) { speakTyped = v; prefs.speakTyped = v }
-    fun setTtsVoice(name: String) { ttsVoice = name.ifBlank { "system-default" }; prefs.ttsVoice = ttsVoice; voice.setVoice(ttsVoice) }
+    fun changeTtsVoice(name: String) { ttsVoice = name.ifBlank { "system-default" }; prefs.ttsVoice = ttsVoice; voice.setVoice(ttsVoice) }
     @JvmName("applyWebOn") fun setWebOn(v: Boolean) { webOn = v; prefs.webOn = v }
     fun setAssistantName(v: String) { assistantNameState = v.take(20); prefs.assistantName = v.take(20) }
 
