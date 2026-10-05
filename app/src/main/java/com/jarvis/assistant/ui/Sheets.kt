@@ -5,6 +5,7 @@ import android.provider.Settings
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -17,6 +18,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -93,6 +96,43 @@ fun SettingsSheet(vm: JarvisViewModel, onDismiss: () -> Unit) {
             }
 
             SwitchRow(s.readTyped, vm.speakTyped) { vm.setSpeakTyped(it) }
+
+            Text(vm.tr("🔊 صدای نریدر", "🔊 Reader voice"), color = Muted, fontSize = 12.sp)
+            Text(
+                vm.tr(
+                    "بهینه: از نریدر و موتور TTS خود گوشی استفاده می‌شود و برای پخش صدا نیازی به مصرف سهمیه API ندارد.",
+                    "Optimized: uses the phone's own TTS engine and does not consume your AI/API quota for speech."
+                ),
+                color = Muted, fontSize = 11.sp, lineHeight = 17.sp
+            )
+            var voiceMenu by remember { mutableStateOf(false) }
+            Box(Modifier.fillMaxWidth()) {
+                OutlinedButton({ voiceMenu = true }, Modifier.fillMaxWidth()) {
+                    val label = if (vm.ttsVoice == "system-default") vm.tr("بهینه / صدای پیش‌فرض سیستم", "Optimized / system default")
+                    else vm.ttsVoices.firstOrNull { it.name == vm.ttsVoice }?.let { "${it.locale.displayLanguage} — ${it.name}" } ?: vm.ttsVoice
+                    Text(label, color = GoldText, maxLines = 1)
+                }
+                DropdownMenu(expanded = voiceMenu, onDismissRequest = { voiceMenu = false }) {
+                    DropdownMenuItem(
+                        text = { Text(vm.tr("بهینه / صدای پیش‌فرض سیستم", "Optimized / system default")) },
+                        onClick = { vm.setTtsVoice("system-default"); voiceMenu = false }
+                    )
+                    vm.ttsVoices.take(40).forEach { voice ->
+                        DropdownMenuItem(
+                            text = { Text("${voice.locale.displayLanguage} — ${voice.name}", maxLines = 1) },
+                            onClick = { vm.setTtsVoice(voice.name); voiceMenu = false }
+                        )
+                    }
+                }
+            }
+            Text(
+                vm.tr(
+                    "اگر در آینده صدای آنلاین/سرویسی اضافه شود، ممکن است مصرف سهمیه داشته باشد؛ صدای سیستم فعلی چنین مصرفی ندارد.",
+                    "If online/service voices are added later, they may consume a quota; the current system voices do not."
+                ),
+                color = Gold, fontSize = 10.sp, lineHeight = 15.sp
+            )
+
             SwitchRow(s.webSearch, vm.webOn) { vm.setWebOn(it) }
             SwitchRow(vm.tr("🎙 گوش‌به‌زنگ: با صدا زدن اسم دستیار باز بشه", "🎙 Always listening: open by saying the name"), vm.wakeOn) { vm.setWake(it) }
             if (vm.wakeOn) {

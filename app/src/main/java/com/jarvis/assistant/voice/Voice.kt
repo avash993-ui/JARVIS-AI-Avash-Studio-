@@ -9,6 +9,7 @@ import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import java.util.Locale
+import android.speech.tts.Voice as TtsVoice
 
 /** Speech-to-text and text-to-speech using the phone's own engines (the normal system voice). */
 class Voice(private val ctx: Context) {
@@ -17,11 +18,14 @@ class Voice(private val ctx: Context) {
     private var ttsReady = false
     private var pending = 0
     private var onSpeechIdle: (() -> Unit)? = null
+    private var selectedVoiceName: String = "system-default"
+    private var readyCallback: ((List<TtsVoice>) -> Unit)? = null
 
     init {
         tts = TextToSpeech(ctx) { status ->
             ttsReady = status == TextToSpeech.SUCCESS
-            if (ttsReady) tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+            if (ttsReady) {
+                tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                 override fun onStart(id: String?) {}
                 override fun onDone(id: String?) { finishOne() }
                 @Deprecated("Deprecated in Java") override fun onError(id: String?) { finishOne() }
@@ -31,10 +35,34 @@ class Voice(private val ctx: Context) {
 
     val busy get() = pending > 0
 
+    fun setVoice(name: String) {
+        selectedVoiceName = name.ifBlank { "system-default" }
+        applySelectedVoice()
+    }
+
+    fun getSelectedVoice(): String = selectedVoiceName
+
+    fun onReady(callback: (List<TtsVoice>) -> Unit) {
+        readyCallback = callback
+        if (ttsReady) callback(availableVoices())
+    }
+
+    fun availableVoices(): List<TtsVoice> = tts?.voices?.toList()?.sortedWith(compareBy({ it.locale.displayName }, { it.name })) ?: emptyList()
+
+    private fun applySelectedVoice() {
+        val engine = tts ?: return
+        if (!ttsReady) return
+        if (selectedVoiceName == "system-default") {
+            engine.voice = engine.defaultVoice
+            return
+        }
+        engine.voices?.firstOrNull { it.name == selectedVoiceName }?.let { engine.voice = it }
+    }
+
     private fun finishOne() { pending = (pending - 1).coerceAtLeast(0); if (pending == 0) onSpeechIdle?.invoke() }
 
-    fun listen(lang: String, onPartial: (String) -> Unit, onFinal: (String) -> Unit, onFail: () -> Unit) {
-        if (!SpeechRecognizer.isRecognitionAvailable(ctx)) { onFail(); return }
+    fun listen(lang: String, onPartial: (String) -> Unit, onFinal: (String) -> Unit, onFail: (Int) -> Unit) {
+        if (!SpeechRecognizer.isRecognitionAvailable(ctx)) { onFail(SpeechRecognizer.ERROR_CLIENT); return }
         recognizer?.destroy()
         val r = SpeechRecognizer.createSpeechRecognizer(ctx)
         recognizer = r
@@ -45,13 +73,13 @@ class Voice(private val ctx: Context) {
             override fun onBufferReceived(b: ByteArray?) {}
             override fun onEndOfSpeech() {}
             override fun onEvent(t: Int, p: Bundle?) {}
-            override fun onError(e: Int) { onFail() }
+            override fun onError(e: Int) { onFail(e) }
             override fun onPartialResults(b: Bundle?) {
                 b?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()?.let(onPartial)
             }
             override fun onResults(b: Bundle?) {
                 val t = b?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()
-                if (t.isNullOrBlank()) onFail() else onFinal(t)
+                if (t.isNullOrBlank()) onFail(SpeechRecognizer.ERROR_NO_MATCH) else onFinal(t)
             }
         })
         val i = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)

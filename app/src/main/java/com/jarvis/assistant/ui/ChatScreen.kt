@@ -84,7 +84,7 @@ fun ChatScreen(vm: JarvisViewModel) {
         else micLauncher.launch(Manifest.permission.RECORD_AUDIO)
     }
 
-    val dim by animateFloatAsState(if (vm.overlay) .35f else 1f, tween(600), label = "dim")
+    val dim by animateFloatAsState(if (vm.overlay && !vm.wakeConversation) .35f else 1f, tween(600), label = "dim")
 
     Box(Modifier.fillMaxSize().background(Bg).systemBarsPadding().imePadding()) {
         Column(Modifier.fillMaxSize()) {
@@ -120,26 +120,57 @@ fun ChatScreen(vm: JarvisViewModel) {
         val sc by animateFloatAsState(if (shown) 1f else .3f, tween(800), label = "sc")
         val al by animateFloatAsState(if (shown) 1f else 0f, tween(600), label = "al")
         if (shown || al > .01f) {
-            Column(
-                Modifier.align(Alignment.BottomCenter).padding(start = 20.dp, end = 20.dp, bottom = 78.dp).graphicsLayer { alpha = al },
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                IconTile(Icons.Rounded.Close, vm.tr("بستن", "Close"), { vm.stopAll() }, 38.dp)
-                Spacer(Modifier.height(8.dp))
-                val label = when (vm.phase) {
-                    Phase.Listening -> s.stListen
-                    Phase.Thinking -> if (vm.webNote) s.stWeb else s.stThink
-                    Phase.Speaking -> s.stSpeak
-                    Phase.Idle -> ""
+            if (vm.wakeConversation) {
+                // Wake Word UI: intentionally small, non-modal, and easy to close without dimming the app.
+                Row(
+                    Modifier.align(Alignment.BottomEnd).padding(end = 14.dp, bottom = 78.dp).graphicsLayer { alpha = al },
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(7.dp),
+                ) {
+                    val label = when (vm.phase) {
+                        Phase.Listening -> s.stListen
+                        Phase.Thinking -> if (vm.webNote) s.stWeb else s.stThink
+                        Phase.Speaking -> s.stSpeak
+                        Phase.Idle -> ""
+                    }
+                    Column(
+                        horizontalAlignment = Alignment.End,
+                        modifier = Modifier.widthIn(max = 190.dp),
+                    ) {
+                        if (vm.overlayText.isNotBlank()) {
+                            Text(
+                                vm.overlayText, color = GoldText, fontSize = 12.sp, lineHeight = 18.sp,
+                                textAlign = TextAlign.End, maxLines = 3,
+                            )
+                        } else {
+                            Text(label, color = Muted, fontSize = 11.sp, maxLines = 1)
+                        }
+                    }
+                    HoloOrb(vm.phase, 72.dp, Modifier.scale(sc).clickable { vm.stopAll() })
+                    IconTile(Icons.Rounded.Close, vm.tr("بستن", "Close"), { vm.stopAll() }, 32.dp)
                 }
-                Text(
-                    if (vm.overlayText.isNotBlank()) vm.overlayText else label,
-                    color = if (vm.overlayText.isNotBlank()) GoldText else Muted,
-                    fontSize = 15.sp, lineHeight = 26.sp, textAlign = TextAlign.Center, maxLines = 5,
-                    modifier = Modifier.widthIn(max = 340.dp),
-                )
-                Spacer(Modifier.height(12.dp))
-                HoloOrb(vm.phase, 100.dp, Modifier.offset(y = offY).scale(sc).clickable { vm.stopAll() })
+            } else {
+                Column(
+                    Modifier.align(Alignment.BottomCenter).padding(start = 20.dp, end = 20.dp, bottom = 78.dp).graphicsLayer { alpha = al },
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    IconTile(Icons.Rounded.Close, vm.tr("بستن", "Close"), { vm.stopAll() }, 38.dp)
+                    Spacer(Modifier.height(8.dp))
+                    val label = when (vm.phase) {
+                        Phase.Listening -> s.stListen
+                        Phase.Thinking -> if (vm.webNote) s.stWeb else s.stThink
+                        Phase.Speaking -> s.stSpeak
+                        Phase.Idle -> ""
+                    }
+                    Text(
+                        if (vm.overlayText.isNotBlank()) vm.overlayText else label,
+                        color = if (vm.overlayText.isNotBlank()) GoldText else Muted,
+                        fontSize = 15.sp, lineHeight = 26.sp, textAlign = TextAlign.Center, maxLines = 5,
+                        modifier = Modifier.widthIn(max = 340.dp),
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    HoloOrb(vm.phase, 100.dp, Modifier.offset(y = offY).scale(sc).clickable { vm.stopAll() })
+                }
             }
         }
     }

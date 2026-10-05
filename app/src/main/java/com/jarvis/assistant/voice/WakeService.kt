@@ -86,7 +86,12 @@ class WakeService : Service() {
             .putExtra(RecognizerIntent.EXTRA_LANGUAGE, if (prefs.lang == "fa") "fa-IR" else "en-US")
             .putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
             .putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, packageName)
-        try { rec?.startListening(i) } catch (e: Throwable) { rec?.destroy(); rec = null; schedule(3000) }
+        try {
+            rec?.startListening(i)
+        } catch (e: Throwable) {
+            rec?.destroy(); rec = null
+            schedule(1200)
+        }
     }
 
     private fun heard(b: Bundle?): Boolean {
@@ -107,8 +112,11 @@ class WakeService : Service() {
         override fun onPartialResults(b: Bundle?) { heard(b) }
         override fun onResults(b: Bundle?) { fails = 0; if (!heard(b)) schedule(150) }
         override fun onError(e: Int) {
-            // silence / nothing recognised is NORMAL while waiting for the name: restart right away, no backoff
-            if (e == SpeechRecognizer.ERROR_NO_MATCH || e == SpeechRecognizer.ERROR_SPEECH_TIMEOUT) { schedule(100); return }
+            // Silence is normal while waiting for the wake word. Always restart the recognizer.
+            if (e == SpeechRecognizer.ERROR_NO_MATCH || e == SpeechRecognizer.ERROR_SPEECH_TIMEOUT) {
+                schedule(120)
+                return
+            }
             if (e == SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS) { stopSelf(); return }
             // 12/13 = language not supported / unavailable offline -> fall back to online recognition
             if (e == 12 || e == 13) preferOffline = false
