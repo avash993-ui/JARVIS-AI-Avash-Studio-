@@ -124,7 +124,7 @@ class JarvisViewModel(app: Application) : AndroidViewModel(app) {
     var wakeOn by mutableStateOf(prefs.wakeOn); private set
     var wakeScreenOnly by mutableStateOf(prefs.wakeScreenOnly); private set
     private var wakeRetry = false
-    fun setWakeScreenOnly(v: Boolean) { wakeScreenOnly = v; prefs.wakeScreenOnly = v }
+    fun updateWakeScreenOnly(v: Boolean) { wakeScreenOnly = v; prefs.wakeScreenOnly = v }
     private fun has(p: String) = ContextCompat.checkSelfPermission(ctx, p) == PackageManager.PERMISSION_GRANTED
     fun setWake(on: Boolean) {
         wakeOn = on; prefs.wakeOn = on
