@@ -39,7 +39,7 @@ object ArtifactWriter {
     fun share(ctx: Context, file: File) {
         val uri = FileProvider.getUriForFile(ctx, ctx.packageName + ".fileprovider", file)
         val i = Intent(Intent.ACTION_SEND).apply { type = "application/zip"; putExtra(Intent.EXTRA_STREAM, uri); addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK) }
-        ctx.startActivity(Intent.createChooser(i, "JARVIS"))
+        ctx.startActivity(Intent.createChooser(i, "JARVIS").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
 
     private fun safe(s: String): String = s.replace(Regex("[\\\\/:*?\"<>|]"), "_").trim().ifBlank { "file.txt" }

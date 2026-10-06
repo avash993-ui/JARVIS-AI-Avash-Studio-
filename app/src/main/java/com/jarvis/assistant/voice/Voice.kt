@@ -103,11 +103,13 @@ class Voice(private val ctx: Context) {
     fun speak(text: String, lang: String, idle: () -> Unit) {
         if (!ttsReady || text.isBlank()) { idle(); return }
         onSpeechIdle = idle
-        tts?.language = when (lang) {
-            "fa" -> Locale.forLanguageTag("fa-IR")
-            "en" -> Locale.forLanguageTag("en-US")
-            else -> Locale.getDefault()
-        }
+        if (selectedVoiceName == "system-default") {
+            tts?.language = when (lang) {
+                "fa" -> Locale.forLanguageTag("fa-IR")
+                "en" -> Locale.forLanguageTag("en-US")
+                else -> Locale.getDefault()
+            }
+        } else applySelectedVoice()   // setLanguage() would silently replace the voice the user picked
         pending++
         tts?.speak(text, TextToSpeech.QUEUE_ADD, null, "j${System.nanoTime()}")
     }

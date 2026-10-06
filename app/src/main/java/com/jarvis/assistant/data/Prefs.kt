@@ -51,9 +51,9 @@ class Prefs(ctx: Context) {
     }
 
     fun putSecureString(key: String, value: String) {
-        val iv = ByteArray(12).also { java.security.SecureRandom().nextBytes(it) }
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        cipher.init(Cipher.ENCRYPT_MODE, secureKey(), GCMParameterSpec(128, iv))
+        cipher.init(Cipher.ENCRYPT_MODE, secureKey())          // the Keystore generates the IV itself
+        val iv = cipher.iv
         val out = iv + cipher.doFinal(value.toByteArray(StandardCharsets.UTF_8))
         sp.edit().putString("secure_$key", Base64.encodeToString(out, Base64.NO_WRAP)).apply()
     }

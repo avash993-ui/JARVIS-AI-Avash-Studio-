@@ -11,8 +11,19 @@ import java.net.URL
 object Api {
     data class Cfg(val base: String, val key: String, val model: String)
 
-    private fun open(url: String, method: String, key: String): HttpURLConnection {
+    /** Accepts sloppy input: missing https://, trailing slash, or a pasted /chat/completions URL. */
+    private fun base(raw: String): String {
+        var b = raw.trim().trimEnd('/')
+        if (!b.startsWith("http://") && !b.startsWith("https://")) b = "https://$b"
+        for (suffix in listOf("/chat/completions", "/models", "/completions")) if (b.endsWith(suffix)) b = b.removeSuffix(suffix).trimEnd('/')
+        return b
+    }
+    private fun cleanKey(k: String) = k.trim().removePrefix("Bearer ").removePrefix("bearer ").replace(Regex("\\s"), "")
+
+    private fun open(url: String, method: String, key0: String): HttpURLConnection {
+        val key = cleanKey(key0)
         val c = URL(url).openConnection() as HttpURLConnection
+        c.setRequestProperty("User-Agent", "Jarvis-Android/1.0")
         c.requestMethod = method; c.connectTimeout = 20000; c.readTimeout = 60000
         c.setRequestProperty("Accept", "application/json")
         if (key.isNotBlank()) c.setRequestProperty("Authorization", "Bearer $key")
@@ -38,29 +49,44 @@ object Api {
 
     suspend fun chat(cfg: Cfg, messages: List<Pair<String, String>>, maxTokens: Int = 380): Result<String> = withContext(Dispatchers.IO) {
         runCatching {
-            val arr = JSONArray()
-            messages.forEach { arr.put(JSONObject().put("role", it.first).put("content", it.second)) }
-            val b = JSONObject().put("model", cfg.model).put("messages", arr).put("max_tokens", maxTokens).put("temperature", 0.6)
-            val c = open(cfg.base.trimEnd('/') + "/chat/completions", "POST", cfg.key)
-            c.doOutput = true
-            c.setRequestProperty("Content-Type", "application/json")
-            c.outputStream.use { it.write(b.toString().toByteArray()) }
-            val j = JSONObject(read(c))
-            var t = j.getJSONArray("choices").getJSONObject(0).getJSONObject("message").optString("content", "")
-            t = t.replace(Regex("(?s)<think>.*?</think>"), "").trim()
-            if (t.isEmpty()) throw IllegalStateException("empty answer")
-            t
+            var budget = maxTokens
+            var text = ""
+            for (attempt in 0..1) {
+                val arr = JSONArray()
+                messages.forEach { arr.put(JSONObject().put("role", it.first).put("content", it.second)) }
+                val b = JSONObject().put("model", cfg.model).put("messages", arr).put("max_tokens", budget).put("temperature", 0.6)
+                val c = open(base(cfg.base) + "/chat/completions", "POST", cfg.key)
+                c.doOutput = true
+                c.setRequestProperty("Content-Type", "application/json")
+                c.outputStream.use { it.write(b.toString().toByteArray()) }
+                val j = JSONObject(read(c))
+                val ch = j.getJSONArray("choices").getJSONObject(0)
+                text = ch.getJSONObject("message").optString("content", "").replace(Regex("(?s)<think>.*?</think>"), "").trim()
+                if (text.isNotEmpty()) break
+                budget = (budget * 6).coerceAtMost(4000)   // reasoning models can use the whole small budget for thinking
+            }
+            if (text.isEmpty()) throw IllegalStateException("empty answer (model may be a reasoning model; try another model)")
+            text
         }
     }
 
-    suspend fun analyzeParts(cfg: Cfg, text: String, imageDataUrls: List<String>, maxTokens: Int = 900): Result<String> = withContext(Dispatchers.IO) {
+    suspend fun analyzeParts(cfg: Cfg, text: String, imageDataUrls: List<String>, maxTokens: Int = 900): Result<String> {
+        val r = analyzeOnce(cfg, text, imageDataUrls, maxTokens)
+        if (r.isFailure && imageDataUrls.isNotEmpty()) {
+            val t = analyzeOnce(cfg, text + "\n\n(Note: the selected model could not read the attached images; answer from the text only and tell the user to pick a vision-capable model for images.)", emptyList(), maxTokens)
+            if (t.isSuccess) return t
+        }
+        return r
+    }
+
+    private suspend fun analyzeOnce(cfg: Cfg, text: String, imageDataUrls: List<String>, maxTokens: Int): Result<String> = withContext(Dispatchers.IO) {
         runCatching {
             val content = JSONArray()
             content.put(JSONObject().put("type", "text").put("text", text))
             imageDataUrls.take(6).forEach { content.put(JSONObject().put("type", "image_url").put("image_url", JSONObject().put("url", it))) }
             val arr = JSONArray().put(JSONObject().put("role", "user").put("content", content))
             val b = JSONObject().put("model", cfg.model).put("messages", arr).put("max_tokens", maxTokens)
-            val c = open(cfg.base.trimEnd('/') + "/chat/completions", "POST", cfg.key)
+            val c = open(base(cfg.base) + "/chat/completions", "POST", cfg.key)
             c.doOutput = true; c.setRequestProperty("Content-Type", "application/json")
             c.outputStream.use { it.write(b.toString().toByteArray()) }
             val j = JSONObject(read(c)); val t = j.getJSONArray("choices").getJSONObject(0).getJSONObject("message").optString("content", "").trim()
@@ -72,7 +98,7 @@ object Api {
     suspend fun generateImage(cfg: Cfg, prompt: String): Result<String> = withContext(Dispatchers.IO) {
         runCatching {
             val b = JSONObject().put("model", cfg.model).put("prompt", prompt).put("n", 1).put("size", "1024x1024")
-            val c = open(cfg.base.trimEnd('/') + "/images/generations", "POST", cfg.key)
+            val c = open(base(cfg.base) + "/images/generations", "POST", cfg.key)
             c.doOutput = true; c.setRequestProperty("Content-Type", "application/json")
             c.outputStream.use { it.write(b.toString().toByteArray()) }
             val j = JSONObject(read(c)); val d = j.optJSONArray("data") ?: throw IllegalStateException("no image data")
@@ -81,12 +107,12 @@ object Api {
         }
     }
 
-    suspend fun test(cfg: Cfg): Result<String> = chat(cfg, listOf("user" to "Reply with the single word: OK"), 12)
+    suspend fun test(cfg: Cfg): Result<String> = chat(cfg, listOf("user" to "Reply with the single word: OK"), 64)
 
     /** Live list of model ids from {base}/models (can be 50-300+ entries depending on the service). */
     suspend fun listModels(cfg: Cfg): Result<List<String>> = withContext(Dispatchers.IO) {
         runCatching {
-            val c = open(cfg.base.trimEnd('/') + "/models", "GET", cfg.key)
+            val c = open(base(cfg.base) + "/models", "GET", cfg.key)
             val txt = read(c).trim()
             val arr: JSONArray = if (txt.startsWith("[")) JSONArray(txt) else {
                 val o = JSONObject(txt); o.optJSONArray("data") ?: o.optJSONArray("models") ?: JSONArray()

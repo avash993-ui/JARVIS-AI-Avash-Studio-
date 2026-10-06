@@ -21,16 +21,29 @@ object AttachmentReader {
     fun read(ctx: Context, uri: Uri, name: String, mime: String): Payload {
         val lower = name.lowercase()
         if (mime.startsWith("image/") || lower.endsWith(".png") || lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".webp")) {
-            val bytes = ctx.contentResolver.openInputStream(uri)?.use { readAtMost(it, MAX_BINARY_BYTES) } ?: ByteArray(0)
-            val b64 = Base64.encodeToString(bytes, Base64.NO_WRAP)
-            val mt = if (mime.isBlank()) "image/*" else mime
-            return Payload("Analyze the attached image: $name", listOf("data:$mt;base64,$b64"))
+            return Payload("Analyze the attached image: $name", listOf(shrinkImage(ctx, uri)))
         }
         if (lower.endsWith(".pdf") || mime == "application/pdf") return readPdf(ctx, uri, name)
         if (lower.endsWith(".zip") || lower.endsWith(".jar")) return readZip(ctx, uri, name)
         if (lower.endsWith(".docx")) return readDocx(ctx, uri, name)
-        val text = ctx.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText().take(MAX_TEXT_CHARS) } ?: ""
+        val text = ctx.contentResolver.openInputStream(uri)?.use { String(readAtMost(it, MAX_TEXT_CHARS), Charsets.UTF_8) } ?: ""
         return Payload("Analyze this file named $name.\n\n$text")
+    }
+
+    /** Photos can be 10 MB+; APIs reject that. Scale to <=1280px and send as JPEG. */
+    private fun shrinkImage(ctx: Context, uri: Uri): String {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        ctx.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
+        var sample = 1
+        while (maxOf(bounds.outWidth, bounds.outHeight) / sample > 2000) sample *= 2
+        val opts = BitmapFactory.Options().apply { inSampleSize = sample }
+        val bmp = ctx.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, opts) }
+            ?: throw IllegalStateException("cannot decode image")
+        val scale = 1280f / maxOf(bmp.width, bmp.height)
+        val out = if (scale < 1f) Bitmap.createScaledBitmap(bmp, (bmp.width * scale).toInt(), (bmp.height * scale).toInt(), true) else bmp
+        val bos = ByteArrayOutputStream(); out.compress(Bitmap.CompressFormat.JPEG, 85, bos)
+        if (out !== bmp) out.recycle(); bmp.recycle()
+        return "data:image/jpeg;base64," + Base64.encodeToString(bos.toByteArray(), Base64.NO_WRAP)
     }
 
     private fun readZip(ctx: Context, uri: Uri, name: String): Payload {

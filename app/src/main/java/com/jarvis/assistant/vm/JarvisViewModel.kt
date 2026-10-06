@@ -96,11 +96,17 @@ class JarvisViewModel(app: Application) : AndroidViewModel(app) {
     fun setAssistantName(v: String) { assistantNameState = v.take(20); prefs.assistantName = v.take(20) }
 
     // ---------- developer mode ----------
-    fun unlockDev(pin: String): Boolean {
+    fun unlockDev(pin: String): Boolean = try {
+        unlockDevInner(pin)
+    } catch (t: Throwable) {
+        android.util.Log.e("JARVIS-Dev", "unlock failed", t)
+        // secure storage broke on this phone: fall back to the plain check so the app never crashes
+        if (sha256("avash-jarvis:" + pin.trim()) == LEGACY_DEV_HASH) { devOk = true; prefs.devOk = true; true } else false
+    }
+
+    private fun unlockDevInner(pin: String): Boolean {
         val clean = pin.trim()
         if (clean.isEmpty()) return false
-
-        // Strong verifier: PBKDF2-HMAC-SHA256 with a per-install random salt.
         val saltKey = "devPinSalt"
         val hashKey = "devPinVerifier"
         val storedSalt = prefs.getSecureString(saltKey)
@@ -110,15 +116,16 @@ class JarvisViewModel(app: Application) : AndroidViewModel(app) {
             if (ok) { devOk = true; prefs.devOk = true; return true }
             return false
         }
-
-        // One-time migration from the old fixed SHA-256 verifier.
         val legacy = sha256("avash-jarvis:" + clean)
         if (legacy == LEGACY_DEV_HASH) {
-            val salt = ByteArray(16).also { SecureRandom().nextBytes(it) }
-            val verifier = pbkdf2(clean, salt)
-            prefs.putSecureString(saltKey, salt.toHex())
-            prefs.putSecureString(hashKey, verifier.toHex())
-            devOk = true; prefs.devOk = true; return true
+            devOk = true; prefs.devOk = true            // unlock first; hardening below must never block it
+            runCatching {
+                val salt = ByteArray(16).also { SecureRandom().nextBytes(it) }
+                val verifier = pbkdf2(clean, salt)
+                prefs.putSecureString(saltKey, salt.toHex())
+                prefs.putSecureString(hashKey, verifier.toHex())
+            }
+            return true
         }
         return false
     }
@@ -222,7 +229,13 @@ class JarvisViewModel(app: Application) : AndroidViewModel(app) {
         wakeConversation = true
         conversationLang = Wake.lastLanguage
         followupJob?.cancel()
-        main.postDelayed({ startListening(wakeMode = true, waitSilently = true, recognitionLang = conversationLang) }, 650)
+        Wake.busy = true
+        val hello = if (conversationLang == "en") "Yes?" else "بله؟"
+        overlay = true; overlayText = hello; phase = Phase.Speaking
+        var started = false
+        val go = { if (!started) { started = true; startListening(wakeMode = true, waitSilently = true, recognitionLang = conversationLang) } }
+        voice.speak(hello, conversationLang) { main.post { go() } }
+        main.postDelayed({ go() }, 2500)   // safety: listen even if the voice engine is silent
     }
 
     // ---------- permissions ----------

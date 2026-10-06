@@ -37,6 +37,10 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
 import androidx.lifecycle.setViewTreeLifecycleOwner
+import androidx.savedstate.SavedStateRegistry
+import androidx.savedstate.SavedStateRegistryController
+import androidx.savedstate.SavedStateRegistryOwner
+import androidx.savedstate.ViewTreeSavedStateRegistryOwner
 import com.jarvis.assistant.ui.Gold
 import com.jarvis.assistant.ui.GoldText
 import com.jarvis.assistant.ui.HoloOrb
@@ -60,7 +64,14 @@ class OverlayService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == ACTION_WAKE) showWakeOverlay()
+        if (intent?.action == ACTION_WAKE) {
+            try { showWakeOverlay() } catch (t: Throwable) {
+                android.util.Log.e("JARVIS-Overlay", "overlay failed, opening app instead", t)
+                cleanup()
+                runCatching { startActivity(Intent(this, com.jarvis.assistant.MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP).putExtra("wake", true)) }
+                stopSelf()
+            }
+        }
         return START_NOT_STICKY
     }
 
@@ -75,6 +86,7 @@ class OverlayService : Service() {
         owner = life
         val view = ComposeView(this)
         view.setViewTreeLifecycleOwner(life)
+        ViewTreeSavedStateRegistryOwner.set(view, life)
         view.setContent {
             JarvisTheme {
                 val model = vm ?: return@JarvisTheme
@@ -139,9 +151,12 @@ class OverlayService : Service() {
         super.onDestroy()
     }
 
-    private class OverlayLifecycleOwner : LifecycleOwner {
+    private class OverlayLifecycleOwner : LifecycleOwner, SavedStateRegistryOwner {
         private val registry = LifecycleRegistry(this)
+        private val controller = SavedStateRegistryController.create(this)
         override val lifecycle: Lifecycle get() = registry
+        override val savedStateRegistry: SavedStateRegistry get() = controller.savedStateRegistry
+        init { controller.performAttach(); controller.performRestore(null) }
         fun start() { registry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE); registry.handleLifecycleEvent(Lifecycle.Event.ON_START); registry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME) }
         fun stop() { registry.handleLifecycleEvent(Lifecycle.Event.ON_PAUSE); registry.handleLifecycleEvent(Lifecycle.Event.ON_STOP); registry.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY) }
     }
