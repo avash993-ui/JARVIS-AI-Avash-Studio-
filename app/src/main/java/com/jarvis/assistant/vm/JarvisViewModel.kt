@@ -56,6 +56,7 @@ enum class Screen { Setup, Chat, Tutorial, Contacts }
 class JarvisViewModel(app: Application) : AndroidViewModel(app) {
     companion object {
         @Volatile var current: JarvisViewModel? = null
+        private const val LEGACY_DEV_HASH = "82b2587c09aa1d09417a4b90acbbc23af26744d802fc32840ece10e7f56e2cb1"
     }
     val prefs = Prefs(app)
     private val voice = Voice(app)
@@ -659,9 +660,4 @@ class JarvisViewModel(app: Application) : AndroidViewModel(app) {
         if (c.id == convo.id) newChat()
     }
 
-    override fun onCleared() { voice.release(); super.onCleared() }
-
-    companion object {
-        private const val LEGACY_DEV_HASH = "82b2587c09aa1d09417a4b90acbbc23af26744d802fc32840ece10e7f56e2cb1"
-    }
 }
