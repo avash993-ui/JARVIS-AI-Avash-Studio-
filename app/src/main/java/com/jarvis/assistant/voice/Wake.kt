@@ -23,6 +23,9 @@ object Wake {
     private const val EN_HEY = "hey"
     private const val EN_JARVIS = "jarvis"
 
+    @Volatile var lastLanguage: String = "fa"
+        private set
+
     /**
      * Strict Persian wake phrase.
      *
@@ -43,6 +46,8 @@ object Wake {
         if (tokens.size < 2) return false
         val fa = tokens[0] == HEY && tokens[1] == JARVIS
         val en = tokens[0] == EN_HEY && tokens[1] == EN_JARVIS
+        if (fa) lastLanguage = "fa"
+        if (en) lastLanguage = "en"
         return fa || en
     }
 }

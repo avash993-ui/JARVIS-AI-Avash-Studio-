@@ -70,7 +70,7 @@ class OverlayService : Service() {
         }
         if (root != null) return
         wm = getSystemService(WINDOW_SERVICE) as WindowManager
-        vm = JarvisViewModel(application)
+        vm = JarvisViewModel.current ?: JarvisViewModel(application)
         val life = OverlayLifecycleOwner().also { it.start() }
         owner = life
         val view = ComposeView(this)
@@ -123,14 +123,21 @@ class OverlayService : Service() {
 
     private fun stopOverlay() {
         vm?.stopAll()
+        cleanup()
+        stopSelf()
+    }
+
+    private fun cleanup() {
         root?.let { runCatching { wm.removeView(it) } }
         root = null
         owner?.stop(); owner = null
         vm = null
-        stopSelf()
     }
 
-    override fun onDestroy() { stopOverlay(); super.onDestroy() }
+    override fun onDestroy() {
+        cleanup()
+        super.onDestroy()
+    }
 
     private class OverlayLifecycleOwner : LifecycleOwner {
         private val registry = LifecycleRegistry(this)

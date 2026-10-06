@@ -88,7 +88,11 @@ class Voice(private val ctx: Context) {
         })
         val i = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
             .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            .putExtra(RecognizerIntent.EXTRA_LANGUAGE, if (lang == "fa") "fa-IR" else Locale.getDefault().toLanguageTag())
+            .putExtra(RecognizerIntent.EXTRA_LANGUAGE, when (lang) {
+                "fa" -> "fa-IR"
+                "en" -> "en-US"
+                else -> Locale.getDefault().toLanguageTag()
+            })
             .putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
         r.startListening(i)
     }
@@ -99,7 +103,11 @@ class Voice(private val ctx: Context) {
     fun speak(text: String, lang: String, idle: () -> Unit) {
         if (!ttsReady || text.isBlank()) { idle(); return }
         onSpeechIdle = idle
-        tts?.language = if (lang == "fa") Locale.forLanguageTag("fa-IR") else Locale.getDefault()
+        tts?.language = when (lang) {
+            "fa" -> Locale.forLanguageTag("fa-IR")
+            "en" -> Locale.forLanguageTag("en-US")
+            else -> Locale.getDefault()
+        }
         pending++
         tts?.speak(text, TextToSpeech.QUEUE_ADD, null, "j${System.nanoTime()}")
     }

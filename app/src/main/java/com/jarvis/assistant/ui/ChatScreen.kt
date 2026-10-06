@@ -12,6 +12,7 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -29,6 +30,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -87,8 +89,8 @@ fun ChatScreen(vm: JarvisViewModel) {
     var showFiles by remember { mutableStateOf(false) }
     var imagePrompt by remember { mutableStateOf("") }
     var showImagePrompt by remember { mutableStateOf(false) }
-    val singleFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let { vm.analyzeAttachment(it) } }
-    val multiFiles = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris -> uris.forEach { vm.analyzeAttachment(it) } }
+    val singleFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let { vm.addAttachment(it) } }
+    val multiFiles = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris -> uris.forEach { vm.addAttachment(it) } }
 
     val micLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
         if (ok) vm.startListening()
@@ -105,6 +107,9 @@ fun ChatScreen(vm: JarvisViewModel) {
             TopBar(vm, { showHistory = true }, { vm.newChat() }, { showSettings = true })
             Box(Modifier.weight(1f).alpha(dim)) {
                 if (vm.msgs.isEmpty()) EmptyState(vm) { mic() } else MessageList(vm)
+            }
+            if (vm.attachments.isNotEmpty()) {
+                PendingAttachmentRow(vm, Modifier.fillMaxWidth().padding(horizontal = 12.dp).alpha(dim))
             }
             Row(
                 Modifier.fillMaxWidth().padding(12.dp).alpha(dim),
@@ -123,7 +128,7 @@ fun ChatScreen(vm: JarvisViewModel) {
                 )
                 when {
                     vm.busy -> IconTile(Icons.Rounded.Stop, s.stop, { vm.stopAll() })
-                    input.isBlank() -> IconTile(Icons.Rounded.Mic, s.mic, { mic() })
+                    input.isBlank() && vm.attachments.isEmpty() -> IconTile(Icons.Rounded.Mic, s.mic, { mic() })
                     else -> IconTile(Icons.AutoMirrored.Rounded.Send, s.send, { vm.send(input); input = "" })
                 }
             }
@@ -211,6 +216,50 @@ fun ChatScreen(vm: JarvisViewModel) {
     }
     if (showSettings) SettingsSheet(vm) { showSettings = false }
     if (showHistory) HistorySheet(vm) { showHistory = false }
+}
+
+@Composable
+private fun PendingAttachmentRow(vm: JarvisViewModel, modifier: Modifier = Modifier) {
+    LazyRow(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        contentPadding = PaddingValues(vertical = 6.dp),
+    ) {
+        itemsIndexed(vm.attachments) { index, file ->
+            val icon = when {
+                file.mime.startsWith("image/") -> Icons.Rounded.Image
+                file.mime == "application/pdf" || file.name.endsWith(".pdf", true) -> Icons.Rounded.PictureAsPdf
+                file.name.endsWith(".zip", true) || file.name.endsWith(".jar", true) -> Icons.Rounded.FolderZip
+                file.name.endsWith(".kt", true) || file.name.endsWith(".java", true) || file.name.endsWith(".py", true) || file.name.endsWith(".js", true) || file.name.endsWith(".ts", true) -> Icons.Rounded.Code
+                else -> Icons.Rounded.Description
+            }
+            Box(Modifier.size(82.dp)) {
+                Column(
+                    Modifier.fillMaxSize()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(Panel)
+                        .border(androidx.compose.foundation.BorderStroke(1.dp, TileBorder), RoundedCornerShape(16.dp))
+                        .padding(8.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    Icon(icon, null, tint = Cyan, modifier = Modifier.size(28.dp))
+                    Spacer(Modifier.height(5.dp))
+                    Text(file.name, color = GoldText, fontSize = 9.sp, maxLines = 2, textAlign = TextAlign.Center)
+                }
+                Box(
+                    Modifier.align(Alignment.TopEnd)
+                        .size(22.dp)
+                        .clip(RoundedCornerShape(11.dp))
+                        .background(BarGray)
+                        .clickable { vm.removeAttachment(index) },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(Icons.Rounded.Close, vm.tr("حذف فایل", "Remove file"), tint = Muted, modifier = Modifier.size(14.dp))
+                }
+            }
+        }
+    }
 }
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)

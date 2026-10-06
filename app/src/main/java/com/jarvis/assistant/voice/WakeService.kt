@@ -31,6 +31,7 @@ class WakeService : Service() {
     private var screenOn = true
     private var fails = 0
     private var wakeEnglishNext = false
+    private var activationInProgress = false
     // The wake phrase is Persian and must be recognized as "هی جارویس".
     // Use the provider's normal Persian recognition path instead of forcing an
     // offline engine that may not have a Persian model installed.
@@ -78,13 +79,19 @@ class WakeService : Service() {
     private fun schedule(ms: Long) { h.removeCallbacks(tick); h.postDelayed(tick, ms) }
 
     private fun listen() {
+        if (activationInProgress) return
         if (!SpeechRecognizer.isRecognitionAvailable(this)) {
             android.util.Log.e("JARVIS-Wake", "No SpeechRecognizer available on this device")
             stopSelf()
             return
         }
         if (rec == null) rec = SpeechRecognizer.createSpeechRecognizer(this).also { it.setRecognitionListener(listener) }
-        val wakeLang = if (wakeEnglishNext) "en-US" else if (prefs.lang == "fa") "fa-IR" else java.util.Locale.getDefault().toLanguageTag()
+        val primaryEnglish = prefs.lang != "fa"
+        val wakeLang = if (wakeEnglishNext) {
+            if (primaryEnglish) "fa-IR" else "en-US"
+        } else {
+            if (primaryEnglish) "en-US" else "fa-IR"
+        }
         wakeEnglishNext = !wakeEnglishNext
         val i = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
             .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
@@ -108,17 +115,25 @@ class WakeService : Service() {
         // Wake activation is intentionally independent of the customizable assistant
         // display name. The user must say the exact phrase "هی جارویس".
         if (l.none { Wake.matches(it) }) return false
-        rec?.destroy(); rec = null   // release the mic fully so the app can use it right away
-        Wake.busy = true
-        h.postDelayed({ Wake.busy = false }, 30_000)   // safety: never stay silent forever
-        try {
-            val overlay = Intent(this, OverlayService::class.java).setAction(OverlayService.ACTION_WAKE)
-            startService(overlay)
-        } catch (e: Throwable) {
-            android.util.Log.e("JARVIS-Wake", "Unable to start overlay", e)
-            Wake.busy = false
+        if (activationInProgress) return true
+        activationInProgress = true
+        val old = rec
+        rec = null
+        h.post {
+            runCatching { old?.cancel() }
+            runCatching { old?.destroy() }
+            Wake.busy = true
+            h.postDelayed({ Wake.busy = false }, 30_000)
+            try {
+                val overlay = Intent(this, OverlayService::class.java).setAction(OverlayService.ACTION_WAKE)
+                startService(overlay)
+            } catch (e: Throwable) {
+                android.util.Log.e("JARVIS-Wake", "Unable to start overlay", e)
+                Wake.busy = false
+            }
+            activationInProgress = false
+            schedule(1200)
         }
-        schedule(2000)
         return true
     }
 
@@ -151,7 +166,9 @@ class WakeService : Service() {
     override fun onDestroy() {
         running = false
         h.removeCallbacksAndMessages(null)
+        runCatching { rec?.cancel() }
         rec?.destroy(); rec = null
+        activationInProgress = false
         try { unregisterReceiver(screenRx) } catch (e: Throwable) {}
         super.onDestroy()
     }

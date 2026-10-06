@@ -12,12 +12,16 @@ import java.util.zip.ZipInputStream
 import org.json.JSONObject
 
 object AttachmentReader {
+    private const val MAX_TEXT_CHARS = 180_000
+    private const val MAX_ENTRY_BYTES = 18_000
+    private const val MAX_BINARY_BYTES = 12 * 1024 * 1024
+
     data class Payload(val prompt: String, val images: List<String> = emptyList())
 
     fun read(ctx: Context, uri: Uri, name: String, mime: String): Payload {
         val lower = name.lowercase()
         if (mime.startsWith("image/") || lower.endsWith(".png") || lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".webp")) {
-            val bytes = ctx.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: ByteArray(0)
+            val bytes = ctx.contentResolver.openInputStream(uri)?.use { readAtMost(it, MAX_BINARY_BYTES) } ?: ByteArray(0)
             val b64 = Base64.encodeToString(bytes, Base64.NO_WRAP)
             val mt = if (mime.isBlank()) "image/*" else mime
             return Payload("Analyze the attached image: $name", listOf("data:$mt;base64,$b64"))
@@ -25,7 +29,7 @@ object AttachmentReader {
         if (lower.endsWith(".pdf") || mime == "application/pdf") return readPdf(ctx, uri, name)
         if (lower.endsWith(".zip") || lower.endsWith(".jar")) return readZip(ctx, uri, name)
         if (lower.endsWith(".docx")) return readDocx(ctx, uri, name)
-        val text = ctx.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText().take(120_000) } ?: ""
+        val text = ctx.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText().take(MAX_TEXT_CHARS) } ?: ""
         return Payload("Analyze this file named $name.\n\n$text")
     }
 
@@ -39,7 +43,7 @@ object AttachmentReader {
                         sb.append("\n- ").append(e.name)
                         val n = e.name.lowercase()
                         if (n.endsWith(".kt") || n.endsWith(".java") || n.endsWith(".xml") || n.endsWith(".json") || n.endsWith(".gradle") || n.endsWith(".kts") || n.endsWith(".py") || n.endsWith(".js") || n.endsWith(".ts") || n.endsWith(".md") || n.endsWith(".txt")) {
-                            val bytes = z.readBytes().take(18_000).toByteArray()
+                            val bytes = readAtMost(z, MAX_ENTRY_BYTES)
                             sb.append("\n```").append(String(bytes, Charsets.UTF_8)).append("\n```")
                         }
                         count++
@@ -48,17 +52,30 @@ object AttachmentReader {
                 }
             }
         }
-        return Payload(sb.toString().take(180_000))
+        return Payload(sb.toString().take(MAX_TEXT_CHARS))
     }
 
     private fun readDocx(ctx: Context, uri: Uri, name: String): Payload {
         val text = StringBuilder()
         ctx.contentResolver.openInputStream(uri)?.use { input -> ZipInputStream(input).use { z ->
             var e = z.nextEntry
-            while (e != null) { if (e.name == "word/document.xml") text.append(String(z.readBytes(), Charsets.UTF_8)); z.closeEntry(); e = z.nextEntry }
+            while (e != null) { if (e.name == "word/document.xml") text.append(String(readAtMost(z, MAX_ENTRY_BYTES * 8), Charsets.UTF_8)); z.closeEntry(); e = z.nextEntry }
         }}
         val clean = text.toString().replace(Regex("<[^>]+>"), " ").replace(Regex("\\s+"), " ").take(120_000)
-        return Payload("Analyze DOCX $name:\n$clean")
+        return Payload("Analyze DOCX $name:\n${clean.take(MAX_TEXT_CHARS)}")
+    }
+
+    private fun readAtMost(input: java.io.InputStream, maxBytes: Int): ByteArray {
+        val out = ByteArrayOutputStream(minOf(maxBytes, 64 * 1024))
+        val buffer = ByteArray(8192)
+        var total = 0
+        while (total < maxBytes) {
+            val n = input.read(buffer, 0, minOf(buffer.size, maxBytes - total))
+            if (n <= 0) break
+            out.write(buffer, 0, n)
+            total += n
+        }
+        return out.toByteArray()
     }
 
     private fun readPdf(ctx: Context, uri: Uri, name: String): Payload {

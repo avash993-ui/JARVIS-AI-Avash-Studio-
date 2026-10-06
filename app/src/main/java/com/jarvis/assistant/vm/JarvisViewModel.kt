@@ -7,6 +7,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.provider.Settings
 import android.net.Uri
+import android.provider.OpenableColumns
 import androidx.core.content.ContextCompat
 import com.jarvis.assistant.voice.Wake
 import com.jarvis.assistant.voice.WakeService
@@ -42,6 +43,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.security.MessageDigest
 import java.security.SecureRandom
 import javax.crypto.SecretKeyFactory
@@ -52,14 +54,24 @@ enum class Phase { Idle, Listening, Thinking, Speaking }
 enum class Screen { Setup, Chat, Tutorial, Contacts }
 
 class JarvisViewModel(app: Application) : AndroidViewModel(app) {
+    companion object {
+        @Volatile var current: JarvisViewModel? = null
+    }
     val prefs = Prefs(app)
     private val voice = Voice(app)
     private val main = Handler(Looper.getMainLooper())
     private val ctx get() = getApplication<Application>()
 
     init {
+        current = this
         voice.onReady { voices -> main.post { ttsVoices = voices } }
         voice.setVoice(prefs.ttsVoice)
+    }
+
+    override fun onCleared() {
+        if (current === this) current = null
+        voice.release()
+        super.onCleared()
     }
 
     // ---------- settings ----------
@@ -207,8 +219,9 @@ class JarvisViewModel(app: Application) : AndroidViewModel(app) {
         if (!configured) return
         screen = Screen.Chat
         wakeConversation = true
+        conversationLang = Wake.lastLanguage
         followupJob?.cancel()
-        main.postDelayed({ startListening(wakeMode = true, waitSilently = true) }, 650)
+        main.postDelayed({ startListening(wakeMode = true, waitSilently = true, recognitionLang = conversationLang) }, 650)
     }
 
     // ---------- permissions ----------
@@ -238,6 +251,7 @@ class JarvisViewModel(app: Application) : AndroidViewModel(app) {
     private var generating = false
     private var pendingCall: Pair<String, List<Contact>>? = null
     var wakeConversation by mutableStateOf(false); private set
+    private var conversationLang = lang
     private var manualHasSpoken = false
     private var followupJob: Job? = null
     private var followupDeadline = 0L
@@ -246,7 +260,6 @@ class JarvisViewModel(app: Application) : AndroidViewModel(app) {
     init {
         history.addAll(prefs.loadHistory())
         screen = if (configured) Screen.Chat else Screen.Setup
-        if (wakeOn) startWake()
     }
 
     private var cache: List<Contact>? = null
@@ -309,10 +322,40 @@ class JarvisViewModel(app: Application) : AndroidViewModel(app) {
         return true
     }
 
+    // ---------- pending attachments ----------
+    data class PendingAttachment(val uri: Uri, val name: String, val mime: String)
+    val attachments = mutableStateListOf<PendingAttachment>()
+
+    fun addAttachment(uri: Uri) {
+        val cr = ctx.contentResolver
+        val mime = cr.getType(uri) ?: "application/octet-stream"
+        val name = runCatching {
+            cr.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
+                if (c.moveToFirst()) c.getString(0) else null
+            }
+        }.getOrNull()?.takeIf { it.isNotBlank() }
+            ?: uri.lastPathSegment?.substringAfterLast('/')?.takeIf { it.isNotBlank() }
+            ?: "attachment"
+        runCatching { cr.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+        if (attachments.none { it.uri.toString() == uri.toString() }) {
+            attachments.add(PendingAttachment(uri, name, mime))
+        }
+    }
+
+    fun removeAttachment(index: Int) { if (index in attachments.indices) attachments.removeAt(index) }
+    fun clearAttachments() { attachments.clear() }
+
     // ---------- sending ----------
     fun send(text: String, viaVoice: Boolean = false) {
         val t = text.trim()
-        if (t.isEmpty() || busy) return
+        if (busy) return
+        if (attachments.isNotEmpty()) {
+            val files = attachments.toList()
+            attachments.clear()
+            sendAttachments(t, files)
+            return
+        }
+        if (t.isEmpty()) return
         Wake.busy = true
         if (viaVoice) { overlay = true; overlayText = t; phase = Phase.Thinking }
         if (resolvePending(t, viaVoice)) return
@@ -403,7 +446,8 @@ class JarvisViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun say(chunk: String) {
         Wake.busy = true   // keep the lease fresh while speaking
-        voice.speak(chunk, lang) { if (!generating) main.post { finishTurn() } }
+        val speechLang = if (wakeConversation) conversationLang else lang
+        voice.speak(chunk, speechLang) { if (!generating) main.post { finishTurn() } }
     }
 
     private fun finishTurn() {
@@ -423,7 +467,7 @@ class JarvisViewModel(app: Application) : AndroidViewModel(app) {
         Wake.busy = true
         voice.stopSpeaking()
         overlay = true; overlayText = ""; phase = Phase.Listening
-        voice.listen(lang,
+        voice.listen(conversationLang,
             onPartial = { overlayText = it },
             onFinal = {
                 followupJob?.cancel()
@@ -462,20 +506,26 @@ class JarvisViewModel(app: Application) : AndroidViewModel(app) {
         if (Build.VERSION.SDK_INT >= 26) runCatching { ctx.stopService(Intent(ctx, OverlayService::class.java)) }
     }
 
-    fun startListening(wakeMode: Boolean = false, waitSilently: Boolean = false) {
+    fun startListening(wakeMode: Boolean = false, waitSilently: Boolean = false, recognitionLang: String = lang) {
         if (busy && !wakeMode) return
-        if (wakeMode) wakeConversation = true else manualHasSpoken = false
+        if (wakeMode) {
+            wakeConversation = true
+            if (recognitionLang == "fa" || recognitionLang == "en") conversationLang = recognitionLang
+        } else {
+            manualHasSpoken = false
+            conversationLang = lang
+        }
         Wake.busy = true
         voice.stopSpeaking()
         overlay = true; overlayText = ""; phase = Phase.Listening
-        voice.listen(lang,
+        voice.listen(if (wakeMode || wakeConversation) conversationLang else recognitionLang,
             onPartial = { overlayText = it; if (!wakeMode) manualHasSpoken = true },
             onFinal = { manualHasSpoken = true; send(it, true) },
             onFail = { error ->
                 if (wakeMode || wakeConversation) {
                     // The first listen after saying the name is silent: no "I didn't hear you" yet.
                     if (waitSilently && (error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT || error == SpeechRecognizer.ERROR_CLIENT)) {
-                        main.postDelayed({ if (wakeConversation) startListening(wakeMode = true, waitSilently = true) }, 180)
+                        main.postDelayed({ if (wakeConversation) startListening(wakeMode = true, waitSilently = true, recognitionLang = conversationLang) }, 180)
                     }
                 } else if (!manualHasSpoken && (error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT || error == SpeechRecognizer.ERROR_CLIENT)) {
                     // Initial manual opening: simply keep waiting; don't scold the user before they speak.
@@ -497,23 +547,77 @@ class JarvisViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // ---------- attachments / multimodal ----------
-    fun analyzeAttachment(uri: Uri) {
-        if (!configured || busy) return
-        viewModelScope.launch {
-            phase = Phase.Thinking; overlay = true
-            val cr = ctx.contentResolver
-            val mime = cr.getType(uri) ?: "application/octet-stream"
-            val name = uri.lastPathSegment?.substringAfterLast('/')?.ifBlank { "attachment" } ?: "attachment"
-            val payload = runCatching { AttachmentReader.read(ctx, uri, name, mime) }.getOrElse {
-                phase = Phase.Idle; overlayText = s.error + (it.message ?: ""); return@launch
+    /** Selecting a file only queues it. No API, microphone, overlay, or TTS starts here. */
+    private fun sendAttachments(question: String, files: List<PendingAttachment>) {
+        if (!configured) {
+            msgs.add(Msg("user", attachmentSummary(question, files)))
+            msgs.add(Msg("assistant", tr("اول باید یه هوش مصنوعی (API) وصل کنی.", "Please connect an AI service (API) first.")))
+            persist()
+            screen = Screen.Setup
+            Wake.busy = false
+            return
+        }
+
+        msgs.add(Msg("user", attachmentSummary(question, files)))
+        val idx = msgs.size
+        msgs.add(Msg("assistant", ""))
+        // This is a normal text chat turn. File analysis must never trigger TTS.
+        overlay = false
+        overlayText = ""
+        webNote = false
+        phase = Phase.Thinking
+        Wake.busy = true
+        generating = true
+
+        job = viewModelScope.launch {
+            val payloads = withContext(Dispatchers.IO) {
+                files.mapNotNull { file -> runCatching { AttachmentReader.read(ctx, file.uri, file.name, file.mime) }.getOrNull() }
             }
-            overlayText = tr("دارم $name رو بررسی می‌کنم…", "Analyzing $name…")
-            val prompt = payload.prompt + "\n\nAnswer in the user's language. Explain what you see, important problems, and useful next steps."
-            Api.analyzeParts(cfg(), prompt, payload.images, if (devOk) 1400 else 800).onSuccess { answer ->
-                msgs.add(Msg("user", tr("فایل: $name", "File: $name"))); msgs.add(Msg("assistant", answer)); persist()
-                overlayText = answer; phase = Phase.Speaking; say(answer)
+            if (payloads.isEmpty()) {
+                msgs[idx] = Msg("assistant", tr("نتونستم فایل‌ها رو بخونم.", "I couldn't read the selected files."))
+                generating = false
+                phase = Phase.Idle
+                Wake.busy = false
+                persist()
+                return@launch
+            }
+
+            val prompt = buildString {
+                append("Answer in the user's language. Analyze the attached files carefully.")
+                if (question.isNotBlank()) {
+                    append("\n\nUser's request: ").append(question)
+                }
+                payloads.forEachIndexed { i, payload ->
+                    append("\n\n--- Attachment ").append(i + 1).append(" ---\n")
+                    append(payload.prompt)
+                }
+            }.take(260_000)
+            val images = payloads.flatMap { it.images }.take(6)
+
+            Api.analyzeParts(cfg(), prompt, images, if (devOk) 1400 else 900).onSuccess { answer ->
+                msgs[idx] = Msg("assistant", answer)
+                generating = false
+                phase = Phase.Idle
+                Wake.busy = false
+                persist()
             }.onFailure { e ->
-                overlayText = s.error + (e.message ?: ""); phase = Phase.Idle; overlay = false; Wake.busy = false
+                msgs[idx] = Msg("assistant", s.error + (e.message ?: ""))
+                generating = false
+                phase = Phase.Idle
+                Wake.busy = false
+                persist()
+            }
+        }
+    }
+
+    private fun attachmentSummary(question: String, files: List<PendingAttachment>): String {
+        val labels = files.joinToString(", ") { it.name }
+        return buildString {
+            append(tr("فایل‌ها: ", "Files: "))
+            append(labels)
+            if (question.isNotBlank()) {
+                append("\n\n")
+                append(question)
             }
         }
     }
