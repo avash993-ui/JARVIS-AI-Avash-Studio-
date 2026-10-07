@@ -40,7 +40,7 @@ import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
-import androidx.savedstate.ViewTreeSavedStateRegistryOwner
+import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.jarvis.assistant.ui.Gold
 import com.jarvis.assistant.ui.GoldText
 import com.jarvis.assistant.ui.HoloOrb
@@ -86,7 +86,7 @@ class OverlayService : Service() {
         owner = life
         val view = ComposeView(this)
         view.setViewTreeLifecycleOwner(life)
-        ViewTreeSavedStateRegistryOwner.set(view, life)
+        view.setViewTreeSavedStateRegistryOwner(life)
         view.setContent {
             JarvisTheme {
                 val model = vm ?: return@JarvisTheme
